@@ -1,0 +1,46 @@
+---
+title: "Brown Tree Snakes - Initial Models"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Basic Brown Tree Snakes management model
+
+### First step: Generating model
+
+Size-structured model with 4 size classes. The simplest version I'll start with is has growth rates between size classes, reproductive rates for the 3 larger size classes and death rates for all. The model is discrete, with a time step equaling 3 months.
+
+The entire population in time step t ($N_t$) is defined as:
+
+$$
+N_t = \sum_{i = 1}^{4} n_{i,t}
+$$
+
+The population of the first size class ($n_{1,t}$), is defined as:
+
+$$
+n_{i,t} = [1 - (\alpha_1 + d_1)] n_{1,t-1} + \sum_{n=2}^{4} r_i*n_{i, t-1}  
+$$
+
+The second size classes ($n_{2,t}$) is defined as:
+
+$$
+n_{2,t} = [1-(\alpha_2 + d_2)]n_{2, t-1} + \alpha_1*n_{1,t-1}
+$$
+
+The third size classes ($n_{3,t}$) is defined as:
+
+$$
+n_{3,t} = [1-(\alpha_3 + d_3)]n_{3, t-1} + \alpha_2*n_{2,t-1}
+$$
+
+The fourth and final size class ($n_{4,t}$) is defined as:
+
+$$
+n_{4,t} = (1-d_4)n_{4,t-1} + \alpha_3*n_{3,t-1}
+$$
