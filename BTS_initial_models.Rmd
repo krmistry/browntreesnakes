@@ -60,7 +60,7 @@ Initial conditions, just to get the model going:
 
 -   80 time steps (20 years)
 
-```{r simplest_model}
+```{r generating_model}
 # Total starting population
 N <- 100
 
@@ -100,10 +100,12 @@ repro_vector <- c("r_2" = 0.2, # reproductive rate for medium
                   "r_3" = 0.2, # reproductive rate for large
                   "r_4" = 0.2) # reproductive rate for x-large
 
+# Number of years to simulate (with 4 time steps per year)
+Year <- 20
 
 # Empty matrix to fill with population results for a 20 year timeseries
 # A column for each size class, plus a totals column
-timeseries <- as.data.frame(matrix(NA, nrow = 80, ncol = n_bins+1))
+timeseries <- as.data.frame(matrix(NA, nrow = Year*4, ncol = n_bins+1))
 colnames(timeseries) <- c(bins, "total")
 
 # Time 0 in first row
@@ -132,21 +134,24 @@ for(year in 2:nrow(timeseries)) {
                              timeseries[year, 4])
 }
 
-# Adding vector to identify years, since the time step is less than a year (3 months)
-timeseries$year <- rep(1:20, each = 4)
-
+# Adding years, since the time step is less than a year (3 months)
+timeseries$year <- rep(1:Year, each = 4)
+# Adding quarterly time step column
+timeseries$quarter <- rep(paste0("Q", 1:4), Year)
 
 
 
 ### Plotting all populations to see what's happening
 
 # Melt matrix to make plotting easier
-tm_plot <- melt(timeseries[, c(1:4, 6)], id.vars = "year")
-colnames(tm_plot)[2:3] <- c("size", "pop")
-#tm_plot$Year <- c(1:20)
+tm_plot <- melt(timeseries[, -5], id.vars = c("year", "quarter"))
+colnames(tm_plot)[3:4] <- c("size", "pop")
 
-ggplot(tm_plot, aes(fill = size, y = pop, x = year)) +
-    geom_bar(position="stack", stat="identity")
+
+ggplot(tm_plot, aes(fill = quarter, y = pop, x = year)) +
+  geom_bar(position="dodge", stat="identity") +
+  facet_wrap(vars(size)) +
+  theme_bw()
 
 
 
@@ -197,11 +202,11 @@ What the code below is doing:
 
 -   Create a dataframe for timeseries, with columns for each size class; the first row, time $t_1$, has 250 individuals in each size class
 
--   Loop from 2 - 80 time steps OR condition met:
+-   Loop from 2 - 80 time steps OR until condition met:
 
-    -   Generate new population for time step, using equations in first step above
+    -   Generate new population for time step, using function defined in generating_model chunk
 
-    -   Using new population, perform removal step, using equation in second step above
+    -   Using new population, perform removal step, using function defined in removals chunk
 
     -   If any size class populations go below 1, set population to 0
 
@@ -224,12 +229,13 @@ m_rate <- c("small" = 0.3,
             "xlarge" = 0.3)
 
 # Setting up new dataframe for timeseries with both generating and removals, starting with a larger population (N = 1000, still equally distributed across size classes)
-timeseries_rm <- timeseries[0,]
-timeseries_rm[1, ] <- c(rep(250, 4), 1000, 1)
+timeseries_rm <- timeseries[0, 1:5]
+timeseries_rm[1, ] <- c(rep(250, 4), 1000)
+
 
 ### Using a large loop with an if statement to break it once conditions are met (N <= 1)
 
-for(ts in 2:80) {
+for(ts in 2:(Year*4)) {
   # Generate next time step populations
   all_pop <- generate_fun(t_minus_1 = timeseries_rm[ts-1,],
                                        growth = growth_vector,
@@ -258,17 +264,22 @@ for(ts in 2:80) {
   }
 }
 
+# Adding year and quarter columns
 timeseries_rm$year <- timeseries$year[1:nrow(timeseries_rm)]
+timeseries_rm$quarter <- timeseries$quarter[1:nrow(timeseries_rm)]
+
 timeseries_rm
 
 ### Plotting all populations to see what's happening
 
 # Melt matrix to make plotting easier
-tm_rm_plot <- melt(timeseries_rm[, c(1:4, 6)], id.vars = "year")
-colnames(tm_rm_plot)[2:3] <- c("size", "pop")
+tm_rm_plot <- melt(timeseries_rm[, -5], id.vars = c("year", "quarter"))
+colnames(tm_rm_plot)[3:4] <- c("size", "pop")
 
-ggplot(tm_rm_plot, aes(fill = size, y = pop, x = year)) +
-    geom_bar(position="dodge", stat="identity")
+ggplot(tm_rm_plot, aes(fill = quarter, y = pop, x = year)) +
+  geom_bar(position="dodge", stat="identity") +
+  facet_wrap(vars(size)) +
+  theme_bw()
 
 ```
 
@@ -280,20 +291,20 @@ The assumptions for the observation model are based on the visual survey method,
 
 # Vector of detection probability for each size class
 p_prob <- c("small" = 1,
-       "medium" = 1,
-       "large" = 1,
-       "xlarge" = 1)
+            "medium" = 1,
+            "large" = 1,
+            "xlarge" = 1)
 
 # Setting up new dataframe for timeseries with observed populations, taken every 4th time step
-timeseries_obs <- timeseries[0,]
+timeseries_obs <- timeseries[0, 1:5]
 
 # Creating separate timeseries to store actual population, for every time step to have something to observe, starting with N = 10,000, still equally distributed across size classes
-timeseries_raw <- timeseries[0,]
-timeseries_raw[1, ] <- c(rep(2500, 4), 10000, 1)
+timeseries_raw <- timeseries[0, 1:5]
+timeseries_raw[1, ] <- c(rep(2500, 4), 10000)
 
 ### Using a large loop with an if statement to break it once conditions are met (N <= 1)
 
-for(ts in 2:80) {
+for(ts in 2:(Year*4)) {
   # Generate next time step populations
   all_pop <- generate_fun(t_minus_1 = timeseries_raw[ts-1,],
                                        growth = growth_vector,
