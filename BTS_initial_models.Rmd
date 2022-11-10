@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(reshape2)
 library(ggplot2)
+library(tidyr)
 ```
 
 ## Basic Brown Tree Snakes management model
@@ -343,9 +344,11 @@ for(ts in 2:(Year*4)) {
   }
 }
 
-# Adding year to both raw and observation timeseries
+# Adding year and quarter to both raw and observation timeseries
 timeseries_raw$year <- timeseries$year[1:nrow(timeseries_raw)]
+timeseries_raw$quarter <- timeseries$quarter[1:nrow(timeseries_raw)]
 timeseries_obs$year <- timeseries_raw$year
+timeseries_obs$quarter <- timeseries_raw$quarter
 
 # Excluding time steps with no observation step from observation dataframe
 timeseries_obs_only <- drop_na(timeseries_obs, "small")
@@ -353,27 +356,30 @@ timeseries_obs_only$year <- c(1:nrow(timeseries_obs_only))
 
 ### Plotting all populations to see what's happening
 # Melt observationi dataframe to make plotting easier
-tm_obs_plot <- melt(timeseries_obs[, c(1:4, 6)], id.vars = "year")
-colnames(tm_obs_plot)[2:3] <- c("size", "pop")
+tm_obs_plot <- melt(timeseries_obs[, -5], id.vars = c("year", "quarter"))
+colnames(tm_obs_plot)[3:4] <- c("size", "pop")
 
 ### Plotting observations only
 ggplot(tm_obs_plot, aes(fill = size, y = pop, x = year)) +
-    geom_bar(position="dodge", stat="identity")
+  geom_bar(position="dodge", stat="identity") +
+  theme_bw() +
+  labs(title = "Observation only", subtitle = "Sampled in Q4")
 
 
 ### Plotting both raw timeseries and observation
 # Combine raw and observed dataframes, and melting to plot
 timeseries_raw$data_type <- "raw"
 timeseries_obs$data_type <- "observed"
-tm_raw_obs_plot <- melt(rbind(timeseries_raw[, -5], timeseries_obs[, -5]), id.vars = c("year", "data_type"))
-colnames(tm_raw_obs_plot) <- c("year", "data_type", "size", "pop")
+tm_raw_obs_plot <- melt(rbind(timeseries_raw[, -5], timeseries_obs[, -5]), id.vars = c("year", "data_type", "quarter"))
+colnames(tm_raw_obs_plot)[4:5] <- c("size", "pop")
 tm_raw_obs_plot <- drop_na(tm_raw_obs_plot, "pop")
 
 
 # Plot
-ggplot(tm_raw_obs_plot, aes(fill = data_type, color = size, y = pop, x = year)) +
-    geom_bar(position="dodge", stat="identity")
+ggplot(tm_raw_obs_plot, aes(fill = quarter, y = pop, x = year)) +
+  geom_bar(position="dodge", stat="identity") +
+  facet_grid(data_type ~ size) +
+  theme_bw()
+
 
 ```
-
-\*ALL OF THE GGPLOTS ARE TAKING ONLY THE FIRST POPULATION FROM EACH YEAR - NEED TO FIX THIS\*
