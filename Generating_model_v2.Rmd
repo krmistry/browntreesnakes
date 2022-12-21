@@ -1,0 +1,243 @@
+---
+title: "Extended Generating Model"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(fdrtool)
+library(reshape2)
+library(ggplot2)
+library(tidyr)
+```
+
+## Generating Model of Brown Treesnakes
+
+Size-structured model with 4 size classes, with small snakes being less than 850 mm SVL (with a lower limit of 375 mm SVL at hatching), medium snakes being between 850 and 1150 mm SVL, large snakes being between 1150 and 1250 mm SVL, and extra large snakes being larger than 1250 mm SVL. - ***Check these sizes against one of the papers (can't remember now which one did size classes)***
+
+The entire population in time step t ($N_t$) is defined as:
+
+$$
+N_t = \sum_{i = 1}^{4} n_{i,t}
+$$
+
+The population of the first size class in time step t ($n_{1,t}$), is defined as:
+
+$$
+n_{i,t} = [1 - (\alpha_1 + d_1)] n_{1,t-1} + \sum_{i=2}^{4} r_i*n_{i, t-1}  
+$$
+
+The second size classes in time step t ($n_{2,t}$) is defined as:
+
+$$
+n_{2,t} = [1-(\alpha_2 + d_2)]n_{2, t-1} + \alpha_1*n_{1,t-1}
+$$
+
+The third size classes in time step t ($n_{3,t}$) is defined as:
+
+$$
+n_{3,t} = [1-(\alpha_3 + d_3)]n_{3, t-1} + \alpha_2*n_{2,t-1}
+$$
+
+The fourth and final size class in time step t ($n_{4,t}$) is defined as:
+
+$$
+n_{4,t} = (1-d_4)n_{4,t-1} + \alpha_3*n_{3,t-1}
+$$
+
+$i$ *subscripts refer to the four size classes*
+
+Growth rates are defined as:
+
+$\alpha_i \thicksim HN(\mu_i, \sigma)$
+
+$\mu_i$ is based on average growth converted from mm/month estimated in Rodda et al. 1999, using 36 wild snakes (22 males and 14 females) that were captured and then recaptured once after 8 - 16 months. Rodda et al. estimated an average growth rate for males and females (16.1 mm/month for males, 13.1 mm/month for females), which I converted ($\frac{(16.1*22) + (13.1*14)}{36}$) to a general average of 15.4 mm/month. Converting that to quarters, makes for 46.08 mm/month average growth rate.
+
+For each size class, this translates into different growth rates even if all size classes are expected to have the same growth rate (the 36 snakes were mostly between 800 and 1,100 mm SVL, with the largest around 1,250 mm SVL, so the larger sizes were not represented in the sample at all)
+
+Converting this size growth rate into a percentage of the population that will grow into the next size class each quarter.
+
+For small size class (between 350 mm, the size at hatching, to 850 mm):
+
+$$
+\frac{500 \text{ mm}}{46.08 \text{ mm/quarter}} = 10.85069 \text{ quarters}
+$$
+
+$$
+\frac{1}{10.85069} = 0.09216004 = \mu_1
+$$
+
+For medium size class (between 850 and 1150 mm):
+
+$$
+\frac{300 \text {mm}}{46.08 \text{ mm/quarter}} =  6.510417 \text{ quarters}
+$$
+
+$$
+\frac{1}{6.510417} = 0.1536 = \mu_2
+$$
+
+Reproductive rates are defined as:
+
+$r_i \thicksim HN(\nu_i, \theta)$
+
+Natural mortality rates are defined as:
+
+$d_i$ is constant for each size class
+
+```{r growth_rate}
+
+# Checking to see what the yearly rate would be if they constantly grow by 46.08 mm/quarter (at least for small and medium sizes)
+
+# For small size, less than 850
+sample_N <- runif(10000, 850, 1150)
+sample_time <- as.data.frame(matrix(NA, ncol = 7, nrow = 10000))
+sample_time[, 1] <- sample_N 
+yearly_rate <- vector()
+
+for(i in 2:7) {
+  sample_time[, i] <- sample_time[, i - 1] + 46.08
+}
+
+yearly_rate[1] <- sum(sample_time[1] > 1150)
+
+for(i in 2:7) {
+  yearly_rate[i] <- sum(sample_time[i] > 1150) - sum(yearly_rate[1:i-1])
+}
+mean(yearly_rate[-1])/10000
+
+# 0.09657778 in first run
+# 0.09738889 in second run
+# 0.09721111 in third run
+
+# 1/10.3 quarters = 0.09708738 --- I think that is actually right; how weird
+
+### Results of the same calculations, but for the medium size class (which has less growth needed to graduate into the large size class than from small to medium)
+
+# 0.1538667 in first run
+# 0.1535333 in second run
+# 0.1533333 in third run
+
+# 1/6.5 quarters = 0.1538462
+
+#### Construct half normal distributions for growth rate
+# Using absolute value of a normal distribution to create a half normal distribution,
+# with mu set to peak growth rate, and standard deviation based on carrying capacity
+
+carrying_capacity <- 6000 # Arbitrary number to start with
+# Using carrying capacity to figure out a standard deviation 
+sd_1 <- (carrying_capacity*0.975)/1.96
+
+# Using standard error derived from 6000 as an approximate carrying capacity, create vector of densities, transform using half normal to a probability of occurance, then transform to growth rate, using (1 - probability)*peak growth rate
+densities <- runif(10000, 0, 10000)
+prob_values <- dhalfnorm(densities, theta = ((sqrt(pi/2))/sd_1))
+growth_rate_dist <- vector()
+for(i in 1:length(prob_values)) {
+  growth_rate_dist[i] <- (prob_values[i]/max(prob_values))*0.09216
+}
+
+##### Vital rates function
+
+rates_fun <- function(carrying_capacity, 
+                      peak_vital_rate,
+                      current_density) {
+  # Calculate sigma for scaling standard deviation using carrying capacity
+  sd <- (carrying_capacity*0.975)/1.96
+  # Create vector of possible abundance 
+  densities <- runif(100000, 0, carrying_capacity*1.5)
+  # Calculate PDF for all density values
+  prob_values <- dhalfnorm(densities, theta = ((sqrt(pi/2))/sd))
+  # Calculate PDF value for the current density
+  PDf_value <- dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
+  # Use maximum value to scale current density's PDF value, and multiply by the peak vital rate
+  rate <- (PDf_value/max(prob_values))*peak_vital_rate
+  return(rate)
+}
+
+x <- rates_fun(carrying_capacity = 6000, # 116 snakes/hectare for 55 hectares
+          peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
+          current_density = 1000) 
+
+```
+
+Carrying capacity set at 6000 (arbitrarily, based on an estimated density per hectare in a 2015 study, scaled to a 55 hectare area, the size of the HMU)
+
+Using the carrying capacity to create a scale parameter $\sigma$ to create the standard error $\theta$.
+
+$$
+\sigma = \frac{(6000*0.975)}{1.96}
+$$
+
+$$
+\theta = \frac{\sigma \sqrt{\pi}}{\sqrt{2}}
+$$
+
+Using this $\theta$ and with $\mu = 0$, I created a density distribution of possible abundance values, and scaled it so that the highest probability value will be the peak growth rate, $\alpha_1$.
+
+$$
+\frac{x_i}{max(x_i)}
+$$
+
+### Alternate version of density dependent vital rates
+
+What if I had the growth rate be normally distributed, and the mean value would change based on density. That would mean that my peak value isn't the absolute highest growth rate that is possible,
+
+**Alternate option from Bellier paper**
+
+$$
+\log(\gamma_t) = \gamma_0 + \beta_\gamma * N_t
+$$
+
+$\gamma_0$ is the log vital rate at average density, $\beta_\gamma$ represents the strength of density dependence
+
+```{r vital_rates_v_density_2}
+
+# Trying out the Bellier alternate method using growth rate to see what the relationship is between growth rate and density
+gamma_0 <- log(0.09216)
+density_vector <- runif(100000, min = 0, max = 6000*1.5)
+mean_density <- mean(density_vector)
+beta <- -0.00009
+
+gamma_t <- exp(gamma_0 + beta*(density_vector-mean_density))
+
+
+
+plot(density_vector, gamma_t)
+abline(h = exp(gamma_0), col = "red")
+```
+
+```{r growth_v_density_plot}
+
+plot(densities, growth_rate_dist)
+```
+
+```{r generating_model}
+
+### Function to generate population for all size classes in next time step 
+generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 columns for each size class)
+                            growth, # growth rate vector for 3 smaller size classes
+                            mortality, # mortality rate vector for all size classes
+                            reproduction) { # reproductive rate vector for 3 larger size classes
+  # Create vector to hold the current time step's population numbers
+  t <- vector() 
+  # Calculate small class population
+  t[1] <- (1-(growth[1] + mortality[1]))*t_minus_1[, 1] + 
+    reproduction[1]*t_minus_1[, 2] + 
+    reproduction[2]*t_minus_1[, 3] +
+    reproduction[3]*t_minus_1[, 4]
+  # Calculate medium class population
+  t[2] <- (1-(growth[2] + mortality[2]))*t_minus_1[, 2] +
+    growth[1]*t_minus_1[, 1]
+  # Calculate large class population
+  t[3] <- (1-(growth[3] + mortality[3]))*t_minus_1[, 3] +
+    growth[2]*t_minus_1[, 2]
+  # Calculate x-large class population
+  t[4] <- (1 - mortality[4])*t_minus_1[, 4] +
+    growth[3]*t_minus_1[, 3]
+  
+  return(t)
+}
+```
