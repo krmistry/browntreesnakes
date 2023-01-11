@@ -1,0 +1,94 @@
+---
+title: "Vital Rates Lit Review"
+author: "Kelly Mistry"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## BTS Vital Rates from Literature Review
+
+### Growth rate between size classes
+
+### Reproductive rate
+
+Both female and male BTS can potentially reproduce year-round on Guam, although their reproduction is seasonal in their native ranges (Savidge et al. 2007, Mathies et al. 2010)
+
+*Size at sexual maturity (which of my size classes can reproduce)*
+
+-   Savidge et al. 2007:
+
+    -   90% of females were sexually mature at 910 - 1,025 mm SVL (min = 840, max = 1,110) and 90% of males matured from 940 - 1,030 mm SVL (min = 805, max = 1,135)
+
+-   *Number of females in the population who reproduce*
+
+```{=html}
+<!-- -->
+```
+-   Nafus et al. 2021:
+
+    -   Most females only produced once during study (October 2016 - March 2017)
+
+*How many times per year a reproducing female produces a clutch*
+
+-   Nafus et al. 2021:
+
+    -   For females that produced more than once during study, they had one clutch per year
+
+*Clutch size (or number of follicles which could become eggs)*
+
+-   Savidge et al. 2007:
+
+    -   Mean clutch size (14 snakes, based on follicles rather than eggs except in 1 case) is 4.3, sd = 2.2, range 2- 9
+
+-   Rodda et al. 1999:
+
+    -   BTS mean clutch size in native ranges are 4-12, 7 and 5.5
+
+-   Nafus et al. 2021:
+
+    -   an average of 11 follicles for each female juvenile observed, which suggests that 9% (1 out of 11) detected follicles resulted in a female snake
+
+-   Kahl et al. 2012:
+
+    -   Clutch size varies widely across native range (between 3 and 11), with an average of 5.5
+
+    -   Not enough data for a real estimate, but the few clutches found on Guam have had 3 or 4 eggs, with up to 8
+
+*Relationship between size and reproductive capacity*
+
+-   Mathies et al. 2010:
+
+    -   Lots of individual variation in testosterone levels, but not related to body mass
+
+```{=html}
+<!-- -->
+```
+-   Rodda et al. 1999:
+
+    -   Correlation between maternal size and number of eggs found in Australian BTS
+
+-   Kahl et al. 2012:
+
+    -   Larger females lay large clutches
+
+*Incubation length*
+
+-   Rodda et al. 1999:
+
+    -   Egg incubation is likely 75 - 90 days
+
+-   Kahl et al. 2012:
+
+    -   In Australia, incubation took from 76 to 90 days, depending on temperature
+
+    -   Incubation periods on Guam have been longer, from 94 to 126 days
+
+```{r reproduction}
+
+```
+
+### Natural Mortality rate
