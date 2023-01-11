@@ -16,7 +16,7 @@ library(tidyr)
 
 ## Generating Model of Brown Treesnakes
 
-Size-structured model with 4 size classes, with small snakes being less than 850 mm SVL (with a lower limit of 375 mm SVL at hatching), medium snakes being between 850 and 1150 mm SVL, large snakes being between 1150 and 1250 mm SVL, and extra large snakes being larger than 1250 mm SVL. - ***Check these sizes against one of the papers (can't remember now which one did size classes)***
+Size-structured model with 4 size classes, with small snakes being less than 850 mm SVL (with a lower limit of 350 mm SVL at hatching), medium snakes being between 850 and 1150 mm SVL, large snakes being between 1150 and 1250 mm SVL, and extra large snakes being larger than 1250 mm SVL (based on the size classes that Staci used).
 
 The entire population in time step t ($N_t$) is defined as:
 
@@ -54,7 +54,7 @@ Growth rates are defined as:
 
 $\alpha_i \thicksim HN(\mu_i, \sigma)$
 
-$\mu_i$ is based on average growth converted from mm/month estimated in Rodda et al. 1999, using 36 wild snakes (22 males and 14 females) that were captured and then recaptured once after 8 - 16 months. Rodda et al. estimated an average growth rate for males and females (16.1 mm/month for males, 13.1 mm/month for females), which I converted ($\frac{(16.1*22) + (13.1*14)}{36}$) to a general average of 15.4 mm/month. Converting that to quarters, makes for 46.08 mm/month average growth rate.
+$\mu_i$ is based on average growth converted from mm/month estimated in Rodda et al. 1999, using 36 wild snakes (22 males and 14 females) that were captured and then recaptured once after 8 - 16 months. Rodda et al. estimated an average growth rate for males and females (16.1 mm/month for males, 13.1 mm/month for females), which I converted ($\frac{(16.1*22) + (13.1*14)}{36}$) to a general average of 14.9 mm/month. Converting that to quarters, makes for 44.8 mm/quarter average growth rate.
 
 For each size class, this translates into different growth rates even if all size classes are expected to have the same growth rate (the 36 snakes were mostly between 800 and 1,100 mm SVL, with the largest around 1,250 mm SVL, so the larger sizes were not represented in the sample at all)
 
@@ -63,21 +63,21 @@ Converting this size growth rate into a percentage of the population that will g
 For small size class (between 350 mm, the size at hatching, to 850 mm):
 
 $$
-\frac{500 \text{ mm}}{46.08 \text{ mm/quarter}} = 10.85069 \text{ quarters}
+\frac{500 \text{ mm}}{44.8 \text{ mm/quarter}} = 11.16072 \text{ quarters}
 $$
 
 $$
-\frac{1}{10.85069} = 0.09216004 = \mu_1
+\frac{1}{11.16072} = 0.08959995 = \mu_1
 $$
 
 For medium size class (between 850 and 1150 mm):
 
 $$
-\frac{300 \text {mm}}{46.08 \text{ mm/quarter}} =  6.510417 \text{ quarters}
+\frac{300 \text {mm}}{44.8 \text{ mm/quarter}} =  6.696429 \text{ quarters}
 $$
 
 $$
-\frac{1}{6.510417} = 0.1536 = \mu_2
+\frac{1}{6.696429} = 0.1493333 = \mu_2
 $$
 
 Reproductive rates are defined as:
@@ -157,13 +157,22 @@ rates_fun <- function(carrying_capacity,
   return(rate)
 }
 
-x <- rates_fun(carrying_capacity = 6000, # 116 snakes/hectare for 55 hectares
+x <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
           current_density = 1000) 
 
+
+average_growth <- (((16.1*22)+(13.1*14))/36)*3 # converting average monthly mm growth into quarterly
+
+size_class_ranges <- c(850 - 350, 
+                       1150 - 850, 
+                       1250 - 1150)
+
+growth_peak_rates <- 1/(size_class_ranges/average_growth)
+
 ```
 
-Carrying capacity set at 6000 (arbitrarily, based on an estimated density per hectare in a 2015 study, scaled to a 55 hectare area, the size of the HMU)
+Carrying capacity set at 6000 (arbitrary, based on an estimated density per hectare in a 2015 study, scaled to a 55 hectare area, the size of the HMU)
 
 Using the carrying capacity to create a scale parameter $\sigma$ to create the standard error $\theta$.
 
@@ -216,6 +225,15 @@ plot(densities, growth_rate_dist)
 
 ```{r generating_model}
 
+mortality_vector <- c("d_1" = 0.1, 
+                      "d_2" = 0.1, 
+                      "d_3" = 0.1,
+                      "d_4" = 0.1)
+
+repro_vector <- c("r_2" = 0.2, 
+                  "r_3" = 0.2, 
+                  "r_4" = 0.2) 
+
 ### Function to generate population for all size classes in next time step 
 generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 columns for each size class)
                             growth, # growth rate vector for 3 smaller size classes
@@ -240,4 +258,89 @@ generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 colum
   
   return(t)
 }
+
+
+ growth <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
+          peak_vital_rate = growth_peak_rates[1], # peak growth rate for small & medium sizes
+          current_density = 1000) 
+
+# reproduction <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
+#           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
+#           current_density = 1000) 
+
+# Number of years to simulate (with 4 time steps per year)
+Year <- 20
+
+# Starting population
+N <- 6000
+
+# Size classes
+bins <- c("small",
+          "medium",
+          "large",
+          "xlarge")
+n_bins <- length(bins)
+
+# List of empty matrices to fill with growth and reproduction values drawn for each size class in each year
+vital_rates <- list()
+vital_rates$growth <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
+# vital_rates$repro <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
+
+# Empty matrix to fill with population results for a 20 year timeseries
+# A column for each size class, plus a totals column
+timeseries <- as.data.frame(matrix(NA, nrow = Year*4, ncol = n_bins+1))
+colnames(timeseries) <- c(bins, "total")
+
+# Time 0 in first row
+timeseries[1, ] <- c(rep(N/4, 4), N)
+
+for(ts in 2:(Year*4)) {
+  # Generate growth rate for this year
+  vital_rates$growth[ts-1, ] <- rates_fun(carrying_capacity = 6000,
+          peak_vital_rate = growth_peak_rates,
+          current_density = timeseries$total[ts-1])
+  # Generate next time step populations
+  timeseries[ts, 1:4] <- generate_fun(t_minus_1 = timeseries[ts-1,],
+                                       growth = vital_rates$growth[ts-1, ],
+                                       mortality = mortality_vector,
+                                       reproduction = repro_vector)
+  timeseries$total[ts] <- sum(timeseries[ts, 1:4])
+}
+
+# Adding year and quarter columns
+timeseries$year <- rep(1:Year, each = 4)
+timeseries$quarter <- rep(paste0("Q", 1:4), Year)
+
+### Plotting all populations to see what's happening
+
+# Melt matrix to make plotting easier
+tm_plot <- melt(timeseries[, -5], id.vars = c("year", "quarter"))
+colnames(tm_plot)[3:4] <- c("size", "pop")
+
+ggplot(tm_plot, aes(fill = quarter, y = pop, x = year)) +
+  geom_bar(position="dodge", stat="identity") +
+  facet_wrap(vars(size)) +
+  theme_bw()
+
+
+## Plotting growth rates for each size class
+colnames(vital_rates$growth) <- bins[-4]
+vital_rates$growth$year <- rep(1:Year, each = 4)
+vital_rates$growth$quarter <- rep(paste0("Q", 1:4), Year)
+
+growth_rates_plots <- melt(vital_rates$growth[-80,], id.vars = c("year", "quarter"))
+colnames(growth_rates_plots)[3:4] <- c("size", "growth_rate")
+
+ggplot(growth_rates_plots, aes(x = year, y = growth_rate, fill = quarter)) +
+  geom_bar(position = "dodge", stat = "identity")+
+  facet_wrap(vars(size)) +
+  theme_bw()
+
+## Plotting proportion of size classes in population
+ggplot(tm_plot, aes(fill = size, y = pop, x = year)) +
+  geom_bar(position="stack", stat="identity") +
+  facet_wrap(vars(quarter)) +
+  theme_bw()
+
+  
 ```
