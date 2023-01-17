@@ -18,7 +18,17 @@ library(tidyr)
 
 Size-structured model with 4 size classes, with small snakes being less than 850 mm SVL (with a lower limit of 350 mm SVL at hatching), medium snakes being between 850 and 1150 mm SVL, large snakes being between 1150 and 1250 mm SVL, and extra large snakes being larger than 1250 mm SVL (based on the size classes that Staci used).
 
-The entire population in time step t ($N_t$) is defined as:
+A time step in this model is 3 months, and the simulated population is based on the expected population in a 55 hectare area (the size of the HMU, the site of an eradication experiment in the near future).
+
+The parameters I am estimating are:
+
+-   growth of individuals ($\alpha_i$) in $i$ size class
+
+-   reproduction ($r_i$) in $i$ size class
+
+-   natural mortality ($d_i$) in $i$ size class
+
+The entire population in time step $t$ ($N_t$) is defined as:
 
 $$
 N_t = \sum_{i = 1}^{4} n_{i,t}
@@ -48,191 +58,65 @@ $$
 n_{4,t} = (1-d_4)n_{4,t-1} + \alpha_3*n_{3,t-1}
 $$
 
-$i$ *subscripts refer to the four size classes*
+#### Vital Rates
 
-Growth rates are defined as:
-
-$\alpha_i \thicksim HN(\mu_i, \sigma)$
-
-$\mu_i$ is based on average growth converted from mm/month estimated in Rodda et al. 1999, using 36 wild snakes (22 males and 14 females) that were captured and then recaptured once after 8 - 16 months. Rodda et al. estimated an average growth rate for males and females (16.1 mm/month for males, 13.1 mm/month for females), which I converted ($\frac{(16.1*22) + (13.1*14)}{36}$) to a general average of 14.9 mm/month. Converting that to quarters, makes for 44.8 mm/quarter average growth rate.
-
-For each size class, this translates into different growth rates even if all size classes are expected to have the same growth rate (the 36 snakes were mostly between 800 and 1,100 mm SVL, with the largest around 1,250 mm SVL, so the larger sizes were not represented in the sample at all)
-
-Converting this size growth rate into a percentage of the population that will grow into the next size class each quarter.
-
-For small size class (between 350 mm, the size at hatching, to 850 mm):
+Growth rates are density dependent, using estimated carrying capacity ($K$) and peak *(or average, TBD)* growth rate for size class $i$ ($g_i$) constructed from the literature with a half normal relationship between density and growth. $n_t$ is the total population in time step $t$. Carrying capacity is used to construct the standard deviation of a half-normal distribution (with a mean of 0), $\theta$.
 
 $$
-\frac{500 \text{ mm}}{44.8 \text{ mm/quarter}} = 11.16072 \text{ quarters}
+\sigma = \frac{K*0.975}{1.96}
 $$
 
 $$
-\frac{1}{11.16072} = 0.08959995 = \mu_1
+\theta =\frac{\sqrt{\pi/2}}{\sigma}
 $$
 
-For medium size class (between 850 and 1150 mm):
+Using this $\theta$, I calculated the probability density function of $n_t$ and scaled it by the PDF when density is 0, and then multiplied by the peak growth rate to produce a growth rate for size class $i$ at $n_t$, $g_{i, n_t}$. Using the PDF equation for a half-normal distribution with a mean of 0 and standard deviation $\theta$, this becomes:
 
 $$
-\frac{300 \text {mm}}{44.8 \text{ mm/quarter}} =  6.696429 \text{ quarters}
+g_{n_t} = \frac{\frac{2\theta}{\pi}\exp(\frac{-n_t^2\theta^2}{\pi})}{\frac{2\theta}{\pi}\exp(\frac{0^2\theta^2}{\pi})}*g
 $$
 
 $$
-\frac{1}{6.696429} = 0.1493333 = \mu_2
+g_{n_t} = \frac{\exp(\frac{-n_t^2\theta^2}{\pi})}{\exp(0)}*g
 $$
 
-Reproductive rates are defined as:
+$$
+g_{n_t} = \exp(\frac{-n_t^2\theta^2}{\pi})*g
+$$
 
-$r_i \thicksim HN(\nu_i, \theta)$
+Reproductive rates are also density dependent, and are calculated in the same way as growth rate, with peak reproductive rates for each size class constructed from the literature.
 
-Natural mortality rates are defined as:
+Natural mortality rates are constant for each size class, $d_i$, and are constructed from the literature.
 
-$d_i$ is constant for each size class
+**Details about how natural mortality, peak (or average) growth and reproductive rates were constructed from literature review can be found in vital_rates_lit_review.Rmd doc.**
 
-```{r growth_rate}
+```{r vital_rates_fun}
 
-# Checking to see what the yearly rate would be if they constantly grow by 46.08 mm/quarter (at least for small and medium sizes)
 
-# For small size, less than 850
-sample_N <- runif(10000, 850, 1150)
-sample_time <- as.data.frame(matrix(NA, ncol = 7, nrow = 10000))
-sample_time[, 1] <- sample_N 
-yearly_rate <- vector()
-
-for(i in 2:7) {
-  sample_time[, i] <- sample_time[, i - 1] + 46.08
-}
-
-yearly_rate[1] <- sum(sample_time[1] > 1150)
-
-for(i in 2:7) {
-  yearly_rate[i] <- sum(sample_time[i] > 1150) - sum(yearly_rate[1:i-1])
-}
-mean(yearly_rate[-1])/10000
-
-# 0.09657778 in first run
-# 0.09738889 in second run
-# 0.09721111 in third run
-
-# 1/10.3 quarters = 0.09708738 --- I think that is actually right; how weird
-
-### Results of the same calculations, but for the medium size class (which has less growth needed to graduate into the large size class than from small to medium)
-
-# 0.1538667 in first run
-# 0.1535333 in second run
-# 0.1533333 in third run
-
-# 1/6.5 quarters = 0.1538462
-
-#### Construct half normal distributions for growth rate
-# Using absolute value of a normal distribution to create a half normal distribution,
-# with mu set to peak growth rate, and standard deviation based on carrying capacity
-
-carrying_capacity <- 6000 # Arbitrary number to start with
-# Using carrying capacity to figure out a standard deviation 
-sd_1 <- (carrying_capacity*0.975)/1.96
-
-# Using standard error derived from 6000 as an approximate carrying capacity, create vector of densities, transform using half normal to a probability of occurance, then transform to growth rate, using (1 - probability)*peak growth rate
-densities <- runif(10000, 0, 10000)
-prob_values <- dhalfnorm(densities, theta = ((sqrt(pi/2))/sd_1))
-growth_rate_dist <- vector()
-for(i in 1:length(prob_values)) {
-  growth_rate_dist[i] <- (prob_values[i]/max(prob_values))*0.09216
-}
-
-##### Vital rates function
+##### Vital rates function - use for both growth and reproductive rates
 
 rates_fun <- function(carrying_capacity, 
                       peak_vital_rate,
                       current_density) {
   # Calculate sigma for scaling standard deviation using carrying capacity
   sd <- (carrying_capacity*0.975)/1.96
-  # Create vector of possible abundance 
-  densities <- runif(100000, 0, carrying_capacity*1.5)
-  # Calculate PDF for all density values
-  prob_values <- dhalfnorm(densities, theta = ((sqrt(pi/2))/sd))
+  # Calculate PDF when density is 0 (highest density probability value)
+  max_prob_value <- dhalfnorm(0, theta = ((sqrt(pi/2))/sd))
   # Calculate PDF value for the current density
   PDf_value <- dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
   # Use maximum value to scale current density's PDF value, and multiply by the peak vital rate
-  rate <- (PDf_value/max(prob_values))*peak_vital_rate
+  rate <- (PDf_value/max_prob_value)*peak_vital_rate
   return(rate)
 }
 
-x <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
-          peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
-          current_density = 1000) 
-
-
-average_growth <- (((16.1*22)+(13.1*14))/36)*3 # converting average monthly mm growth into quarterly
-
-size_class_ranges <- c(850 - 350, 
-                       1150 - 850, 
-                       1250 - 1150)
-
-growth_peak_rates <- 1/(size_class_ranges/average_growth)
+# Testing:
+# x <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
+#           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
+#           current_density = 1000) 
 
 ```
 
-Carrying capacity set at 6000 (arbitrary, based on an estimated density per hectare in a 2015 study, scaled to a 55 hectare area, the size of the HMU)
-
-Using the carrying capacity to create a scale parameter $\sigma$ to create the standard error $\theta$.
-
-$$
-\sigma = \frac{(6000*0.975)}{1.96}
-$$
-
-$$
-\theta = \frac{\sigma \sqrt{\pi}}{\sqrt{2}}
-$$
-
-Using this $\theta$ and with $\mu = 0$, I created a density distribution of possible abundance values, and scaled it so that the highest probability value will be the peak growth rate, $\alpha_1$.
-
-$$
-\frac{x_i}{max(x_i)}
-$$
-
-### Alternate version of density dependent vital rates
-
-What if I had the growth rate be normally distributed, and the mean value would change based on density. That would mean that my peak value isn't the absolute highest growth rate that is possible,
-
-**Alternate option from Bellier paper**
-
-$$
-\log(\gamma_t) = \gamma_0 + \beta_\gamma * N_t
-$$
-
-$\gamma_0$ is the log vital rate at average density, $\beta_\gamma$ represents the strength of density dependence
-
-```{r vital_rates_v_density_2}
-
-# Trying out the Bellier alternate method using growth rate to see what the relationship is between growth rate and density
-gamma_0 <- log(0.09216)
-density_vector <- runif(100000, min = 0, max = 6000*1.5)
-mean_density <- mean(density_vector)
-beta <- -0.00009
-
-gamma_t <- exp(gamma_0 + beta*(density_vector-mean_density))
-
-
-
-plot(density_vector, gamma_t)
-abline(h = exp(gamma_0), col = "red")
-```
-
-```{r growth_v_density_plot}
-
-plot(densities, growth_rate_dist)
-```
-
-```{r generating_model}
-
-mortality_vector <- c("d_1" = 0.1, 
-                      "d_2" = 0.1, 
-                      "d_3" = 0.1,
-                      "d_4" = 0.1)
-
-repro_vector <- c("r_2" = 0.2, 
-                  "r_3" = 0.2, 
-                  "r_4" = 0.2) 
+```{r generating_model_fun}
 
 ### Function to generate population for all size classes in next time step 
 generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 columns for each size class)
@@ -267,6 +151,15 @@ generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 colum
 # reproduction <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
 #           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
 #           current_density = 1000) 
+
+
+```
+
+
+```{r population}
+
+# Loading vital rates parameters constructed from literature (per Vital_rates_lit_review.Rmd)
+rates_list <- readRDS("vital_rates_lit.rds")
 
 # Number of years to simulate (with 4 time steps per year)
 Year <- 20
