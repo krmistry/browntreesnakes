@@ -144,22 +144,19 @@ generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 colum
 }
 
 
- growth <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
-          peak_vital_rate = growth_peak_rates[1], # peak growth rate for small & medium sizes
-          current_density = 1000) 
-
-# reproduction <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
-#           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
-#           current_density = 1000) 
-
-
 ```
 
+### Generating model experimentation
 
-```{r population}
+```{r population_generation}
 
 # Loading vital rates parameters constructed from literature (per Vital_rates_lit_review.Rmd)
 rates_list <- readRDS("vital_rates_lit.rds")
+
+# Separating out vital rates into separate vectors:
+growth_peak_rates <- rates_list$growth_rates
+repro_vector <- rates_list$repro_rates
+mortality_vector <- rates_list$mortality_rates
 
 # Number of years to simulate (with 4 time steps per year)
 Year <- 20
@@ -177,7 +174,7 @@ n_bins <- length(bins)
 # List of empty matrices to fill with growth and reproduction values drawn for each size class in each year
 vital_rates <- list()
 vital_rates$growth <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
-# vital_rates$repro <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
+# vital_rates$repro <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3)) # Add once I have updated reproduction peak or average rates from lit
 
 # Empty matrix to fill with population results for a 20 year timeseries
 # A column for each size class, plus a totals column
@@ -216,7 +213,7 @@ ggplot(tm_plot, aes(fill = quarter, y = pop, x = year)) +
   theme_bw()
 
 
-## Plotting growth rates for each size class
+## Plotting growth rates for each size class through time
 colnames(vital_rates$growth) <- bins[-4]
 vital_rates$growth$year <- rep(1:Year, each = 4)
 vital_rates$growth$quarter <- rep(paste0("Q", 1:4), Year)
@@ -230,9 +227,11 @@ ggplot(growth_rates_plots, aes(x = year, y = growth_rate, fill = quarter)) +
   theme_bw()
 
 ## Plotting proportion of size classes in population
-ggplot(tm_plot, aes(fill = size, y = pop, x = year)) +
+# Adding timestep to make it easier to plot as continuous through time
+tm_plot$time_step <- rep(1:(Year*4), 4)
+
+ggplot(tm_plot, aes(fill = size, y = pop, x = time_step)) +
   geom_bar(position="stack", stat="identity") +
-  facet_wrap(vars(quarter)) +
   theme_bw()
 
   
