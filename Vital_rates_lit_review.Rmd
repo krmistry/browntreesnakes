@@ -13,6 +13,62 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Growth rate between size classes
 
+$\mu_i$ is based on average growth converted from mm/month estimated in Rodda et al. 1999, using 36 wild snakes (22 males and 14 females) that were captured and then recaptured once after 8 - 16 months. Rodda et al. estimated an average growth rate for males and females (16.1 mm/month for males, 13.1 mm/month for females), which I converted ($\frac{(16.1*22) + (13.1*14)}{36}$) to a general average of 14.9 mm/month. Converting that to quarters, makes for 44.8 mm/quarter average growth rate.
+
+For each size class, this translates into different growth rates even if all size classes are expected to have the same growth rate (the 36 snakes were mostly between 800 and 1,100 mm SVL, with the largest around 1,250 mm SVL, so the larger sizes were not represented in the sample at all)
+
+Converting this size growth rate into a percentage of the population that will grow into the next size class each quarter.
+
+For small size class (between 350 mm, the size at hatching, to 850 mm):
+
+$$
+\frac{500 \text{ mm}}{44.8 \text{ mm/quarter}} = 11.16072 \text{ quarters}
+$$
+
+$$
+\frac{1}{11.16072} = 0.08959995 = \mu_1
+$$
+
+For medium size class (between 850 and 1150 mm):
+
+$$
+\frac{300 \text {mm}}{44.8 \text{ mm/quarter}} =  6.696429 \text{ quarters}
+$$
+
+$$
+\frac{1}{6.696429} = 0.1493333 = \mu_2
+$$
+
+Carrying capacity set at 6000 (arbitrary, based on an estimated density per hectare in a 2015 study, scaled to a 55 hectare area, the size of the HMU)
+
+Using the carrying capacity to create a scale parameter $\sigma$ to create the standard error $\theta$.
+
+$$
+\sigma = \frac{(6000*0.975)}{1.96}
+$$
+
+$$
+\theta = \frac{\sigma \sqrt{\pi}}{\sqrt{2}}
+$$
+
+Using this $\theta$ and with $\mu = 0$, I created a density distribution of possible abundance values, and scaled it so that the highest probability value will be the peak growth rate, $\alpha_1$.
+
+$$
+\frac{x_i}{max(x_i)}
+$$
+
+```{r peak_growth_rate}
+
+average_growth <- (((16.1*22)+(13.1*14))/36)*3 # converting average monthly mm growth into quarterly
+
+size_class_ranges <- c(850 - 350, 
+                       1150 - 850, 
+                       1250 - 1150)
+
+growth_rates <- 1/(size_class_ranges/average_growth)
+
+```
+
 ### Reproductive rate
 
 Both female and male BTS can potentially reproduce year-round on Guam, although their reproduction is seasonal in their native ranges (Savidge et al. 2007, Mathies et al. 2010)
@@ -23,14 +79,13 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
     -   90% of females were sexually mature at 910 - 1,025 mm SVL (min = 840, max = 1,110) and 90% of males matured from 940 - 1,030 mm SVL (min = 805, max = 1,135)
 
--   *Number of females in the population who reproduce*
+    -   
 
-```{=html}
-<!-- -->
-```
+*Number of females in the population who reproduce*
+
 -   Nafus et al. 2021:
 
-    -   Most females only produced once during study (October 2016 - March 2017)
+    -   Most females only produced once during study (October 2016 - March 2017); there were 106 individuals (65 females, 44 males), 82% of whom are over 850 mm SVL captured in that time frame, but I'll have to look at the actual data to see how many females and how many of those females reproduced
 
 *How many times per year a reproducing female produces a clutch*
 
@@ -64,9 +119,6 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
     -   Lots of individual variation in testosterone levels, but not related to body mass
 
-```{=html}
-<!-- -->
-```
 -   Rodda et al. 1999:
 
     -   Correlation between maternal size and number of eggs found in Australian BTS
@@ -89,6 +141,37 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
 ```{r reproduction}
 
+# Default reproduction (delete once I construct average rates from lit)
+repro_rates <- c("r_2" = 0.2, 
+                  "r_3" = 0.2, 
+                  "r_4" = 0.2) 
+
+# Reproductive capacity at each size category
+
+
 ```
 
 ### Natural Mortality rate
+
+```{r mortality}
+
+# Not updated with actual data yet!!
+mortality_rates <- c("d_1" = 0.1, 
+                      "d_2" = 0.1, 
+                      "d_3" = 0.1,
+                      "d_4" = 0.1)
+
+```
+
+### Saving all average (or peak) vital rates to rds file
+
+```{r saving_vital_rates}
+
+rates_list <- list(size_class_ranges = size_class_ranges,
+                   growth_rates = growth_rates, 
+                   repro_rates = repro_rates,
+                   mortality_rates = mortality_rates)
+
+saveRDS(rates_list, file = "vital_rates_lit.rds")
+
+```
