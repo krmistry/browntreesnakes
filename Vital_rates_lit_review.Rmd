@@ -7,6 +7,9 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(readxl)
 ```
 
 ## BTS Vital Rates from Literature Review
@@ -79,19 +82,39 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
     -   90% of females were sexually mature at 910 - 1,025 mm SVL (min = 840, max = 1,110) and 90% of males matured from 940 - 1,030 mm SVL (min = 805, max = 1,135)
 
-    -   
+-   Nafus et al. 2021:
+
+    -   Smallest with follicles: 967 (965 at first measurement)
+
+    -   Smallest with juvenile traced: 1021 (938 at first measurement)
 
 *Number of females in the population who reproduce*
 
 -   Nafus et al. 2021:
 
-    -   Most females only produced once during study (October 2016 - March 2017); there were 106 individuals (65 females, 44 males), 82% of whom are over 850 mm SVL captured in that time frame, but I'll have to look at the actual data to see how many females and how many of those females reproduced
+    -   Most females only produced once during study (October 2016 - March 2017); there were 106 individuals (65 females, 44 males), 82% of whom are over 850 mm SVL captured in that time frame - info from manuscript. Below is from [their data](https://www.sciencebase.gov/catalog/item/6023110cd34e31ed20c873ea) directly:
+        -   Out of 101 snakes (presumably 65 of whom were female? Except 101 is less than 65+44, so not sure...Sex of individual not shown in data - maybe they're all female? But in which case 101 is definitely not 65...):
+
+            -   26 had follicles (from 1 - 9, mean of 3.8)
+
+            -   15 had juveniles that traced back to them (2 - 11, mean of 4.5)
 
 *How many times per year a reproducing female produces a clutch*
 
 -   Nafus et al. 2021:
 
-    -   For females that produced more than once during study, they had one clutch per year
+    -   For females that produced more than once during study, they had one clutch per year - according to manuscript
+    -   The majority of clutches in this study were estimated to occur during the wet season, so there may be some seasonality (although they are capable of breeding year-round)
+    -   In the dataset from this paper:
+        -   12 of 18 mothers had only 1 clutch in 2 year period(1/17 - 12/18)
+
+        -   Of the remaining 6:
+
+            -   One had at least 2 clutches per year, two years in a row
+
+            -   Two had 1 clutch in one year and 2 in another
+
+            -   Three had 2 clutches in a year (although 2 clutches were close enough together for one it might have been a single clutch)
 
 *Clutch size (or number of follicles which could become eggs)*
 
@@ -106,6 +129,36 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 -   Nafus et al. 2021:
 
     -   an average of 11 follicles for each female juvenile observed, which suggests that 9% (1 out of 11) detected follicles resulted in a female snake
+    -   From the "Parents" tab of Nafus' data, looking at the 68 juveniles that were genetically traced back to both parents (4 couldn't be traced to either parent, and 1 could only be traced to the mother):
+        -   18 mothers (3 have identifiers starting with F and the rest start with A, maybe the F ones aren't included in the "IPM" tab data?)
+
+            -   12 had only 1 clutch (earliest clutch estimated birth date in data set is January 2017, latest is December 2018)
+
+                -   2 had only 1 juvenile
+
+                -   4 had 2 juveniles
+
+                -   4 had 3 juveniles
+
+                -   2 had 4 juveniles
+
+            -   Of the ones that had multiple clutches:
+
+                -   Two had 11 offspring:
+
+                    -   in 6 clutches (4 or 5 is more likely), with estimated birth dates in June 2017 (1), September 2017 (2), October 2017 (1), November 2017 (3), June 2018 (3) and September 2018 (1) (the ones in September, October and November 2017 seem unlikely to be separate clutches)
+
+                    -   in 2 clutches, with estimated birth dates in July 2017 (6) and November 2017 (5)
+
+                -   One had 7 offspring, in 3 clutches with estimated birth dates in July 2017 (3), May 2018 (3) and November 2018 (1)
+
+                -   Two had 4 offspring:
+
+                    -   In 2 clutches, with estimated birth dates in September 2018 (3) and December 2018 (1)
+
+                    -   In 3 clutches, with estimated birth dates in November 2017 (1), April 2018 (1) and June 2018 (2)
+
+                -   Finally, the last one had 2 clutches, with estimated birth dates in January 2017 (1) and March 2017 (1)
 
 -   Kahl et al. 2012:
 
@@ -127,6 +180,20 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
     -   Larger females lay large clutches
 
+-   Nafus et al. 2021:
+
+    -   Size distribution in total dataset (not divided by sex, since it wasn't available), based on my size categories:
+
+        -   0 in x-large (\>1250), 5 in large (1150 - 1250), 83 in medium (850 - 1150), and 13 in small (\<850)
+
+    -   26 had follicles (from 1 - 9, mean of 3.8)
+
+        -   5 of these are in my large size class (100% of large snakes in the study, the other 21 are in medium (25% of medium snakes in the study)
+
+    -   15 had juveniles that traced back to them (2 - 11, mean of 4.5)
+
+        -   3 of these 15 are in my large size class (60% of large snakes in study), the other 12 are in medium (14.4% of medium snakes in study)
+
 *Incubation length*
 
 -   Rodda et al. 1999:
@@ -139,27 +206,118 @@ Both female and male BTS can potentially reproduce year-round on Guam, although 
 
     -   Incubation periods on Guam have been longer, from 94 to 126 days
 
+```{r nafus_data_analysis}
+nafus_data <- list()
+
+nafus_data$IPM <- read_excel(here("Data/Nafus_2021/BTS Demography Closed Population CP.xlsx"), sheet = "IPM")
+
+nafus_data$Parents <- read_excel(here("Data/Nafus_2021/BTS Demography Closed Population CP.xlsx"), sheet = "Parents", col_types = c(rep("guess", 3), "date", rep("guess", 8)))
+
+sires_subset <- nafus_data$Parents[, c(1,4,5)]
+table(sires_subset$Sire)
+
+dams_subset <- nafus_data$Parents[, c(1,4,9)]
+table(dams_subset$Dam)
+
+table(nafus_data$Parents[,c(5,9)])
+
+table_clutch <- table(nafus_data$Parents[, c(4,9)])
+for(i in 1:nrow(table_clutch)) {
+  for(j in 1:ncol(table_clutch)) {
+    if (table_clutch[i, j] != 0) {
+  table_clutch[i, j] <- 1
+    }
+  }
+}
+clutches_per_dam <- addmargins(table_clutch, c(1,2), sum)
+# 12 dams had only 1 clutch in 2 year period
+
+# Clutch size
+date_by_dam <- table(nafus_data$Parents[, c(4,9)])
+all_clutch_size <- date_by_dam[date_by_dam != 0, drop = FALSE]
+
+```
+
+"
+
 ```{r reproduction}
 
 # Default reproduction (delete once I construct average rates from lit)
-repro_rates <- c("r_2" = 0.2, 
-                  "r_3" = 0.2, 
-                  "r_4" = 0.2) 
+# repro_rates <- c("r_2" = 0.2, 
+#                   "r_3" = 0.2, 
+#                   "r_4" = 0.2) 
 
-# Reproductive capacity at each size category
+### Sexual maturity at each size category
+# Large and x-large size classes are all sexually mature, and medium is mixed
+# Based on Savidge et al. 2007: 90% of females are sexually mature between 910 and 1,025 mm SVL; Assuming 5% probability of sexual maturity below 910, and 100% above 1,025 (so between 1,025 and 1,150 for medium size class)
+size_range <- 1150 - 850
+part_1 <- ((910-850)/size_range)*0.05
+part_2 <- ((1025-910)/size_range)*0.9
+part_3 <- ((1150-1025)/size_range)
+
+medium_prob <- part_1 + part_2 + part_3 # Assumes uniform distribution of snake sizes within the size class - likely a safe assumption at high density, probably not at low
+sexual_maturity <- c("medium" = medium_prob, "large" = 1, "xlarge" = 1)
+
+### Number of females in population who reproduce 
+# Possibly the least amount of data available for this, and none for x-large so for now will use large for x-large as well. Based on Nafus data,(3 out of 5 large snakes and 12 out of 83 medium snakes traced to juveniles):
+reproducing_females <- c(12/83, 3/5, 3/5)
+
+### Probability a reproducing female produces a clutch in a quarter
+# No size information available; use one value for all sizes, see if I can get more data through Amy
+# From Nafus genetic data: 61% have 12.5% probability of producing a clutch in any given quarter (based on 1 clutch every 2 years); the other 39% have 32.5% probability of producing a clutch in any given quarter (based on average of 2.6 clutches in 2 years)
+clutch_per_quarter <- (0.61*0.125) + (0.39*0.325)
+
+### Clutch size 
+# No size information available; for now, use one value for all sizes, see if I can get more data through Amy
+# From Nafus genetic data:
+clutch_size <- mean(all_clutch_size)
+
+##### Putting all above parts together to get the number of juveniles produced by each sexually mature size class per quarter - this population includes both males and females, and assuming females are 50% of the population, only that half can produce offspring, so the total needs to be multiplied by 0.5:
+repro_rates <- (sexual_maturity*reproducing_females*clutch_per_quarter*clutch_size)*0.5
 
 
 ```
 
 ### Natural Mortality rate
 
-```{r mortality}
+Very little information available anywhere about this.
 
-# Not updated with actual data yet!!
-mortality_rates <- c("d_1" = 0.1, 
-                      "d_2" = 0.1, 
-                      "d_3" = 0.1,
-                      "d_4" = 0.1)
+-   From Nafus et al. 2021:
+
+    -   In first 6 months of study, 8 out of 119 snakes may have died from natural causes (2 from predation (cat and monitor lizard), 6 unknown)
+
+-   From Savidge et al. 2007:
+
+    -   \<10% of 782 snakes collected over \~5 years (1982 - 1987) were obtained because they were road kills (only relevant for a population that can encounter a road, so not relevant for HMU)
+
+-   Estimated life span:
+
+    -   10 or 12 - 15 years (40 - 60 quarters in my model) is what multiple online basic facts-type website say, but I haven't found an actual citation for this yet - using the average estimated growth in Rodda et al. 1999 (44.8 mm/quarter), I can get a very crude estimate of how long it would take a snake to grow from hatchling (350 mm minimum) to the x-large size category
+
+```{r mortality}
+# 
+# # Default values (not based on data!)
+# mortality_rates <- c("d_1" = 0.1, 
+#                       "d_2" = 0.1, 
+#                       "d_3" = 0.1,
+#                       "d_4" = 0.1)
+
+## Predation based on Nafus' data (on adults, I assume?) for mortality in a 6 month period:
+predation <- (2/119)/2
+unknown_mortality <- (6/119)/2
+
+### Calculating mortality due to age (assuming 10 - 15 year lifespan), to add only into x-large mortality
+quarters_to_XL <- (1250-350)/44.8
+maximum_lifespan <- 60 # 15 years, in quarters
+age_mortality <- 1/(maximum_lifespan - quarters_to_XL)
+
+### Putting the above together for mortality by size class:
+# Likely higher predation for juveniles, but no source to quantify this yet
+mortality_rates <- c("d_1" = (predation + unknown_mortality)*3, # arbitrarily increasing juvenile mortality because of expected higher predation 
+                      "d_2" = (predation + unknown_mortality), 
+                      "d_3" = (predation + unknown_mortality),
+                      "d_4" = (predation + unknown_mortality + age_mortality))
+
 
 ```
 
