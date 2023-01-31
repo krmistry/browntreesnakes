@@ -1,0 +1,670 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<metadata>
+  <idinfo>
+    <citation>
+      <citeinfo>
+        <origin>Melia Nafus</origin>
+        <pubdate>20210501</pubdate>
+        <title>Demographic data for toxicant based trial eradication of brown treesnakes in the USGS Closed Population on Guam, 2016 - 2020</title>
+        <geoform>spreadsheet</geoform>
+        <onlink>https://doi.org/10.5066/P9NUZCGX</onlink>
+        <lworkcit>
+          <citeinfo>
+            <origin>Melia G. Nafus</origin>
+            <origin>Shane R. Siers</origin>
+            <origin>Brenna A. Levine</origin>
+            <origin>Zachary C. Quiogue</origin>
+            <origin>Amy A. Yackel Adams</origin>
+            <pubdate>20211228</pubdate>
+            <title>Demographic response of brown treesnakes to extended population suppression</title>
+            <geoform>publication</geoform>
+            <pubinfo>
+              <pubplace>n/a</pubplace>
+              <publish>Wiley</publish>
+            </pubinfo>
+            <onlink>https://doi.org/10.1002/jwmg.22136</onlink>
+          </citeinfo>
+        </lworkcit>
+      </citeinfo>
+    </citation>
+    <descript>
+      <abstract>These data are mark-recapture data procured from conducting nocturnal visual surveys and live lure based trapping for brown treesnakes in the 5 hectare enclosure called USGS Closed Population or Northwest Field North (NWFN). In addition, tissue samples were collected from brown treesnakes in order to build genetic relationships among resident individuals. The population was undergoing acetaminophen based toxicant treatment from March 31 2017 - February 29 2020. Monitoring occurred from 15 October 2016 - 31 March 2020. The data file contains four sheets that report data from different pieces of the demographic response to toxicant applications. Sheet 1 "BTS Counts" reports the number of brown treesnakes known to be in the population on a given date. Sheet 2 "IPM" reports demographic values that were used to inform an integrated projection model to estimate population response, elasticity and sensitivity to toxicants. Sheet 3 "Parents" defines and identifies parental relationships between within the 2017 - 2018 cohort of births to other known snakes in the population. "Snakes Removed" gives the numerical estimate of the number of snakes that were assumed to be have killed by a given toxicant application following failure to subsequently detect them.</abstract>
+      <purpose>The data were collected to build life tables and assess efficacy of acetaminophen based toxicant applications to an enclosed population of brown treesnakes on Guam. The appropriate use of data includes forecasting population and demographic response to acetaminophen applications as well as looking at how parent-offspring relationships may inform susceptibility to intoxication.</purpose>
+    </descript>
+    <timeperd>
+      <timeinfo>
+        <rngdates>
+          <begdate>20161015</begdate>
+          <enddate>20200331</enddate>
+        </rngdates>
+      </timeinfo>
+      <current>observed</current>
+    </timeperd>
+    <status>
+      <progress>In work</progress>
+      <update>As needed</update>
+    </status>
+    <spdom>
+      <descgeog>Guam</descgeog>
+      <bounding>
+        <westbc>144.6300</westbc>
+        <eastbc>144.9500</eastbc>
+        <northbc>13.6500</northbc>
+        <southbc>13.2300</southbc>
+      </bounding>
+    </spdom>
+    <keywords>
+      <theme>
+        <themekt>ISO 19115 Topic Category</themekt>
+        <themekey>biota</themekey>
+        <themekey>environment</themekey>
+      </theme>
+      <theme>
+        <themekt>None</themekt>
+        <themekey>demography</themekey>
+        <themekey>eradication</themekey>
+        <themekey>acetaminophen</themekey>
+        <themekey>toxicant</themekey>
+      </theme>
+      <theme>
+        <themekt>USGS Metadata Identifier</themekt>
+        <themekey>USGS:6023110cd34e31ed20c873ea</themekey>
+      </theme>
+      <place>
+        <placekt>None</placekt>
+        <placekey>Guam</placekey>
+        <placekey>Mariana Island</placekey>
+        <placekey>Pacific Region</placekey>
+      </place>
+    </keywords>
+    <taxonomy>
+      <keywtax>
+        <taxonkt>None</taxonkt>
+        <taxonkey>Brown Treesnake</taxonkey>
+      </keywtax>
+      <taxoncl>
+        <taxonrn>Kingdom</taxonrn>
+        <taxonrv>Animalia</taxonrv>
+        <common>animals</common>
+        <taxoncl>
+          <taxonrn>Subkingdom</taxonrn>
+          <taxonrv>Bilateria</taxonrv>
+          <taxoncl>
+            <taxonrn>Infrakingdom</taxonrn>
+            <taxonrv>Deuterostomia</taxonrv>
+            <taxoncl>
+              <taxonrn>Phylum</taxonrn>
+              <taxonrv>Chordata</taxonrv>
+              <common>chordates</common>
+              <taxoncl>
+                <taxonrn>Subphylum</taxonrn>
+                <taxonrv>Vertebrata</taxonrv>
+                <common>vertebrates</common>
+                <taxoncl>
+                  <taxonrn>Infraphylum</taxonrn>
+                  <taxonrv>Gnathostomata</taxonrv>
+                  <taxoncl>
+                    <taxonrn>Superclass</taxonrn>
+                    <taxonrv>Tetrapoda</taxonrv>
+                    <taxoncl>
+                      <taxonrn>Class</taxonrn>
+                      <taxonrv>Reptilia</taxonrv>
+                      <common>Reptiles</common>
+                      <taxoncl>
+                        <taxonrn>Order</taxonrn>
+                        <taxonrv>Squamata</taxonrv>
+                        <common>Amphisbaenians</common>
+                        <common>Lizards</common>
+                        <common>Snakes</common>
+                        <taxoncl>
+                          <taxonrn>Suborder</taxonrn>
+                          <taxonrv>Serpentes</taxonrv>
+                          <common>Snakes</common>
+                          <taxoncl>
+                            <taxonrn>Infraorder</taxonrn>
+                            <taxonrv>Alethinophidia</taxonrv>
+                            <taxoncl>
+                              <taxonrn>Family</taxonrn>
+                              <taxonrv>Colubridae</taxonrv>
+                              <common>Colubrids</common>
+                              <common>Typical Snakes</common>
+                              <taxoncl>
+                                <taxonrn>Subfamily</taxonrn>
+                                <taxonrv>Colubrinae</taxonrv>
+                                <taxoncl>
+                                  <taxonrn>Genus</taxonrn>
+                                  <taxonrv>Boiga</taxonrv>
+                                  <common>Boigas</common>
+                                  <common>Catsnakes</common>
+                                  <taxoncl>
+                                    <taxonrn>Species</taxonrn>
+                                    <taxonrv>Boiga irregularis</taxonrv>
+                                    <common>Brown Tree Snake</common>
+                                    <common>Brown Treesnake</common>
+                                    <common>Brown Cat Snake</common>
+                                    <common>TSN: 174206</common>
+                                  </taxoncl>
+                                </taxoncl>
+                              </taxoncl>
+                            </taxoncl>
+                          </taxoncl>
+                        </taxoncl>
+                      </taxoncl>
+                    </taxoncl>
+                  </taxoncl>
+                </taxoncl>
+              </taxoncl>
+            </taxoncl>
+          </taxoncl>
+        </taxoncl>
+      </taxoncl>
+    </taxonomy>
+    <accconst>None.  Please see 'Distribution Info' for details.</accconst>
+    <useconst>Users are advised to read the dataset's metadata thoroughly to understand appropriate use and data limitations. Users are also encouraged to contact the author to ensure data are being used properly as they are part of a decade long study which is incomplete.</useconst>
+    <ptcontac>
+      <cntinfo>
+        <cntperp>
+          <cntper>Melia Nafus</cntper>
+          <cntorg>USGS</cntorg>
+        </cntperp>
+        <cntpos>Research Ecologist</cntpos>
+        <cntaddr>
+          <addrtype>mailing</addrtype>
+          <address>2150 Centre Ave Building #C</address>
+          <city>Fort Collins</city>
+          <state>Colorado</state>
+          <postal>80526</postal>
+          <country>USA</country>
+        </cntaddr>
+        <cntvoice>970 226 9255</cntvoice>
+        <cntemail>mnafus@usgs.gov</cntemail>
+      </cntinfo>
+    </ptcontac>
+    <datacred>Department of Defense, Office of Insular Affairs, U.S. Geological Survey</datacred>
+    <native>Microsoft Windows 10</native>
+  </idinfo>
+  <dataqual>
+    <attracc>
+      <attraccr>Data are real values generated from handling animals and tissue collection.</attraccr>
+    </attracc>
+    <logic>All values have been checked for accuracy</logic>
+    <complete>Data monitor brown treesnake response to toxicant applications in an enclosure on Guam.</complete>
+    <lineage>
+      <procstep>
+        <procdesc>Visual surveys at night and trapping using modified minnow traps with a live lure. Capture of individual snakes allowed for marking via scale clipping, PIT tag implantation and collection of tissue.</procdesc>
+        <procdate>20200501</procdate>
+      </procstep>
+    </lineage>
+  </dataqual>
+  <eainfo>
+    <detailed>
+      <enttyp>
+        <enttypl>IPM</enttypl>
+        <enttypd>Excel Worksheet</enttypd>
+        <enttypds>Producer Defined</enttypds>
+      </enttyp>
+      <attr>
+        <attrlabl>PITTAG</attrlabl>
+        <attrdef>Snake ID</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <udom>A name</udom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>sizet</attrlabl>
+        <attrdef>size (snout-vent length) at time t</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>The snakes were not alive at time t</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>466.0</rdommin>
+            <rdommax>1126.0</rdommax>
+            <attrunit>millimeter</attrunit>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>sizet+1</attrlabl>
+        <attrdef>size (snout vent length) at time t+1</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>427</rdommin>
+            <rdommax>1220</rdommax>
+            <attrunit>mm</attrunit>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>aget</attrlabl>
+        <attrdef>Age of animal at time t</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0.03</rdommin>
+            <rdommax>6.99</rdommax>
+            <attrunit>years</attrunit>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>survt+1</attrlabl>
+        <attrdef>Survival status at time t+1</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>0</edomv>
+            <edomvd>Alive</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>1</edomv>
+            <edomvd>Dead</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>fec.fol</attrlabl>
+        <attrdef>The number of follicles produced by a female</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0</rdommin>
+            <rdommax>9</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>fec.juv</attrlabl>
+        <attrdef>The number of juveniles produced by a female</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0</rdommin>
+            <rdommax>11</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+    </detailed>
+    <detailed>
+      <enttyp>
+        <enttypl>BTS Counts</enttypl>
+        <enttypd>Excel Worksheet</enttypd>
+        <enttypds>Producer Defined</enttypds>
+      </enttyp>
+      <attr>
+        <attrlabl>Individuals</attrlabl>
+        <attrdef>Number of individuals detected</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>5</rdommin>
+            <rdommax>117</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Date</attrlabl>
+        <attrdef>Date</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>2016-10-24</rdommin>
+            <rdommax>2017-05-31</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+    </detailed>
+    <detailed>
+      <enttyp>
+        <enttypl>Snakes Removed</enttypl>
+        <enttypd>Excel Worksheet</enttypd>
+        <enttypds>Producer Defined</enttypds>
+      </enttyp>
+      <attr>
+        <attrlabl>First Application Date</attrlabl>
+        <attrdef>The date of a toxicant application, may be the first date in a series of 2-3 applications</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <udom>A date</udom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Applications</attrlabl>
+        <attrdef>The number of applications that occurred within 10 days of each other.</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>1</rdommin>
+            <rdommax>3</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Est. Females Removed</attrlabl>
+        <attrdef>Estimated number of female brown treesnakes categorized as no longer in the population with each application</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0</rdommin>
+            <rdommax>18</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Est. Males Removed</attrlabl>
+        <attrdef>The estimated number of male brown treesnakes no longer in the population following an application</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0</rdommin>
+            <rdommax>16</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Cumulative</attrlabl>
+        <attrdef>The total number of snakes presumed to no longer be in the population by an application or series of applications</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>0</rdommin>
+            <rdommax>32</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+    </detailed>
+    <detailed>
+      <enttyp>
+        <enttypl>Parents</enttypl>
+        <enttypd>Excel Worksheet</enttypd>
+        <enttypds>Producer Defined</enttypds>
+      </enttyp>
+      <attr>
+        <attrlabl>Juv_ID</attrlabl>
+        <attrdef>Identity of a juvenile snake</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <udom>Described names</udom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Days</attrlabl>
+        <attrdef>Number of days the juvenile snake was estimated to be alive</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <rdom>
+            <rdommin>23</rdommin>
+            <rdommax>991</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Status</attrlabl>
+        <attrdef>Dead (1) or alive (0) at close of study</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>1</edomv>
+            <edomvd>Dead</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>0</edomv>
+            <edomvd>Alive</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Est Birth Date</attrlabl>
+        <attrdef>The estimated date of birth for an individual</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No birthday estimated due to lack of parental assignment</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>17 November 2017</rdommin>
+            <rdommax>01 Febraury 2018</rdommax>
+            <attrunit>dates</attrunit>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Sire</attrlabl>
+        <attrdef>Paternal identity</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>Father not identified</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <udom>Described names</udom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Sire RPED - RGRM</attrlabl>
+        <attrdef>Confidence in parental assignments was assessed by subtracting genomic relatedness (RGRM) from pedigree relatedness (RPED). Values exceeding 0.2 indicate a potential assignment error.</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No father assigned for that individual</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>-0.381</rdommin>
+            <rdommax>0.226</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>FATHER_SURV_Days</attrlabl>
+        <attrdef>Number of days a sire survived during toxicant applications</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No father assigned for that individual</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>0.0</rdommin>
+            <rdommax>914.0</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>FATHER_SURV_Stat</attrlabl>
+        <attrdef>Paternal status at the close of the study as alive (0) or dead (1)</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No father assigned for that individual</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>1</edomv>
+            <edomvd>Dead</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>0</edomv>
+            <edomvd>Alive</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Dam</attrlabl>
+        <attrdef>Maternal identity</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No maternal identity assigned</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <udom>Described names</udom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>Dam RPED - RGR</attrlabl>
+        <attrdef>Confidence in parental assignments was assessed by subtracting genomic relatedness (RGRM) from pedigree relatedness (RPED). Values exceeding 0.2 indicate a potential assignment error.</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No maternal identity assigned</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>-0.34</rdommin>
+            <rdommax>0.068</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>MOTHER_SURV_Days</attrlabl>
+        <attrdef>The number of days a dam survived toxicant applications</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No maternal identity assigned</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <rdom>
+            <rdommin>6.0</rdommin>
+            <rdommax>1069.0</rdommax>
+          </rdom>
+        </attrdomv>
+      </attr>
+      <attr>
+        <attrlabl>MOTHER_SURV_Stat</attrlabl>
+        <attrdef>Maternal status at the close of the study as alive (0) or dead (1)</attrdef>
+        <attrdefs>Producer Defined</attrdefs>
+        <attrdomv>
+          <edom>
+            <edomv>NA</edomv>
+            <edomvd>No maternal identity assigned</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>1</edomv>
+            <edomvd>Dead</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+        <attrdomv>
+          <edom>
+            <edomv>0</edomv>
+            <edomvd>Alive</edomvd>
+            <edomvds>Producer defined</edomvds>
+          </edom>
+        </attrdomv>
+      </attr>
+    </detailed>
+  </eainfo>
+  <distinfo>
+    <distrib>
+      <cntinfo>
+        <cntperp>
+          <cntper>GS ScienceBase</cntper>
+          <cntorg>U.S. Geological Survey</cntorg>
+        </cntperp>
+        <cntaddr>
+          <addrtype>mailing address</addrtype>
+          <address>Denver Federal Center, Building 810, Mail Stop 302</address>
+          <city>Denver</city>
+          <state>CO</state>
+          <postal>80225</postal>
+          <country>United States</country>
+        </cntaddr>
+        <cntvoice>1-888-275-8747</cntvoice>
+        <cntemail>sciencebase@usgs.gov</cntemail>
+      </cntinfo>
+    </distrib>
+    <distliab>Unless otherwise stated, all data, metadata and related materials are considered to satisfy the quality standards relative to the purpose for which the data were collected. Although these data and associated metadata have been reviewed for accuracy and completeness and approved for release by the U.S. Geological Survey (USGS), no warranty expressed or implied is made regarding the display or utility of the data on any other system or for general or scientific purposes, nor shall the act of distribution constitute any such warranty.</distliab>
+    <stdorder>
+      <digform>
+        <digtinfo>
+          <formname>Digital Data</formname>
+        </digtinfo>
+        <digtopt>
+          <onlinopt>
+            <computer>
+              <networka>
+                <networkr>https://doi.org/10.5066/P9NUZCGX</networkr>
+              </networka>
+            </computer>
+          </onlinopt>
+        </digtopt>
+      </digform>
+      <fees>None</fees>
+    </stdorder>
+  </distinfo>
+  <metainfo>
+    <metd>20220714</metd>
+    <metc>
+      <cntinfo>
+      </cntinfo>
+      <cntinfo>
+        <cntperp>
+          <cntper>FORT Metadata Specialist</cntper>
+          <cntorg>U.S. Geological Survey</cntorg>
+        </cntperp>
+        <cntpos>FORT Metadata Specialist</cntpos>
+        <cntaddr>
+          <addrtype>mailing</addrtype>
+          <address>2150 Centre Avenue, Building C</address>
+          <city>Fort Collins</city>
+          <state>Colorado</state>
+          <postal>80526</postal>
+        </cntaddr>
+        <cntvoice>970-226-9100</cntvoice>
+        <cntfax>970-226-9230</cntfax>
+        <cntemail>fortdatamanagement@usgs.gov</cntemail>
+      </cntinfo>
+    </metc>
+    <metstdn>FGDC Biological Data Profile of the Content Standard for Digital Geospatial Metadata</metstdn>
+    <metstdv>FGDC-STD-001.1-1999</metstdv>
+  </metainfo>
+</metadata>
