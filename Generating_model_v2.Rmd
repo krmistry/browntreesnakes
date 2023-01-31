@@ -126,36 +126,36 @@ generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 colum
                             reproduction) { # reproductive rate vector for 3 larger size classes
   # Create vector to hold the current time step's population numbers
   t <- vector() 
-  # Calculate small class population (if population is 0 or negative, set to 0)
+  # Calculate small class population (if population is less than 1, set to 0)
   t[1] <- (1-(growth[1] + mortality[1]))*t_minus_1[, 1] + 
     reproduction[1]*t_minus_1[, 2] + 
     reproduction[2]*t_minus_1[, 3] +
     reproduction[3]*t_minus_1[, 4]
-  if(t[1] > 0) {
+  if(t[1] >= 1) {
     t[1] <- t[1]
   } else { 
     t[1] <- 0
   }
-  # Calculate medium class population (if population is 0 or negative, set to 0)
+  # Calculate medium class population (if population is less than 1, set to 0)
   t[2] <- (1-(growth[2] + mortality[2]))*t_minus_1[, 2] +
     growth[1]*t_minus_1[, 1]
-  if(t[2] > 0) {
+  if(t[2] >= 1) {
     t[2] <- t[2]
   } else {
     t[2] <- 0
   }
-  # Calculate large class population (if population is 0 or negative, set to 0)
+  # Calculate large class population (if population is less than 1, set to 0)
   t[3] <- (1-(growth[3] + mortality[3]))*t_minus_1[, 3] +
     growth[2]*t_minus_1[, 2]
-  if(t[3] > 0) {
+  if(t[3] >= 1) {
     t[3] <- t[3]
   } else {
     t[3] <- 0
   }
-  # Calculate x-large class population (if population is 0 or negative, set to 0)
+  # Calculate x-large class population (if population is less than 1, set to 0)
   t[4] <- (1 - mortality[4])*t_minus_1[, 4] +
     growth[3]*t_minus_1[, 3]
-  if(t[4] > 0) {
+  if(t[4] >= 1) {
     t[4] <- t[4]
   } else {
     t[4] <- 0
@@ -181,7 +181,7 @@ repro_vector <- rates_list$repro_rates
 mortality_vector <- rates_list$mortality_rates
 
 # Number of years to simulate (with 4 time steps per year)
-Year <- 50
+Year <- 100
 
 # Starting population
 N <- 6000
@@ -194,7 +194,7 @@ bins <- c("small",
 n_bins <- length(bins)
 
 # Standard deviation of stochastic process
-sd <- 10
+sd <- 5
 
 # List of empty matrices to fill with growth and reproduction values drawn for each size class in each year
 vital_rates <- list()
@@ -269,10 +269,12 @@ ggplot(repro_rates_plots, aes(x = year, y = repro_rate)) +
 # Adding timestep to make it easier to plot as continuous through time
 tm_plot$time_step <- rep(1:(Year*4), 4)
 
-ggplot(tm_plot, aes(fill = size, y = pop, x = time_step)) +
+init_plot <- ggplot(tm_plot, aes(fill = size, y = pop, x = time_step)) +
   geom_bar(position="stack", stat="identity") +
   theme_bw()
-
+# Saving plot
+ggsave(filename = "initial_pop_plot.png", plot = init_plot,
+       path = here("Results"))
   
 ```
 
@@ -283,8 +285,8 @@ ggplot(tm_plot, aes(fill = size, y = pop, x = time_step)) +
 Trying out a number of different starting populations to see how the model behaves
 
 ```{r starting_pop}
-# Starting population list to iterate over (10 choices)
-N_options <- seq(500, 7500, 750)
+# Starting population list to iterate over 
+N_options <- unique(c(seq(100, 1100, 200), seq(500, 7500, 750))) # 15 scenarios
 # Vector of names for lists of results by starting population
 SP_list_names <- paste0("SP_", N_options)
 
@@ -312,7 +314,7 @@ all_timeseries <- list()
 
 
 ### Loops
-## Within each loop: set starting population, create dataframes to hold growth and reproductive rates, and the population numbers through time. 
+## Within each loop: set starting population, create dataframes to hold growth and reproductive rates, and the population numbers through time. Then, run model for Year*4 time series with each startig population value, and save the population results and the growth & reproduction values through time
 
 for(sp in 1:length(N_options)) {
   # Set starting population
@@ -421,7 +423,8 @@ final_pop_melt$scenario <- factor(final_pop_melt$scenario, levels = SP_list_name
 
 final_ts_plot <- ggplot(final_pop_melt, aes(y = pop, x = scenario, fill = size)) +
   geom_bar(position="stack", stat="identity") +
-  theme_bw()
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 # Saving plot
 ggsave(filename = "final_ts_pop_comparison.png", plot = final_ts_plot, path = here("Results/sensitivity_analyses/starting_pop/Plots"))
@@ -435,7 +438,7 @@ for(sp in 1:length(SP_list_names)) {
 }
 final_growth$scenario <- SP_list_names
 # Melting data for plotting
-final_growth_melt <- melt(final_growth[, -4], id.vars = c("scenario"))
+final_growth_melt <- melt(final_growth, id.vars = c("scenario"))
 colnames(final_growth_melt)[2:3] <- c("size", "growth_rate")
 # Making scenarios into ordered factors for clarity
 final_growth_melt$scenario <- factor(final_growth_melt$scenario, levels = SP_list_names)
@@ -457,7 +460,7 @@ for(sp in 1:length(SP_list_names)) {
 final_repro$scenario <- SP_list_names
 
 # Melting data for plotting
-final_repro_melt <- melt(final_repro[, -4], id.vars = c("scenario"))
+final_repro_melt <- melt(final_repro, id.vars = c("scenario"))
 colnames(final_repro_melt)[2:3] <- c("size", "growth_rate")
 # Making scenarios into ordered factors for clarity
 final_repro_melt$scenario <- factor(final_repro_melt$scenario, levels = SP_list_names)
