@@ -1,97 +1,13 @@
----
-title: "Extended Generating Model"
-author: "Kelly Mistry"
-date: "`r Sys.Date()`"
-output: html_document
----
+### Exploring the influence of stochasticity on BTS generating model; this script runs 
+### through scenarios with different starting population and starting size distributions
+### without adding stochasticity to each time step's population calculations
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
 
 library(fdrtool)
 library(reshape2)
 library(ggplot2)
 library(tidyr)
 library(here)
-```
-
-## Generating Model of Brown Treesnakes
-
-Size-structured model with 4 size classes, with small snakes being less than 850 mm SVL (with a lower limit of 350 mm SVL at hatching), medium snakes being between 850 and 1150 mm SVL, large snakes being between 1150 and 1250 mm SVL, and extra large snakes being larger than 1250 mm SVL (based on the size classes that Staci used).
-
-A time step in this model is 3 months, and the simulated population is based on the expected population in a 55 hectare area (the size of the HMU, the site of an eradication experiment in the near future).
-
-The parameters I am estimating are:
-
--   growth of individuals ($\alpha_i$) in $i$ size class
-
--   reproduction ($r_i$) in $i$ size class
-
--   natural mortality ($d_i$) in $i$ size class
-
-The entire population in time step $t$ ($N_t$) is defined as:
-
-$$
-N_t = \sum_{i = 1}^{4} n_{i,t}
-$$
-
-The population of the first size class in time step $t$ ($n_{1,t}$), is defined as:
-
-$$
-n_{i,t} = [1 - (\alpha_1 + d_1)] n_{1,t-1} + \sum_{i=2}^{4} r_i*n_{i, t-1}  
-$$
-
-The second size classes in time step $t$ ($n_{2,t}$) is defined as:
-
-$$
-n_{2,t} = [1-(\alpha_2 + d_2)]n_{2, t-1} + \alpha_1*n_{1,t-1}
-$$
-
-The third size classes in time step $t$ ($n_{3,t}$) is defined as:
-
-$$
-n_{3,t} = [1-(\alpha_3 + d_3)]n_{3, t-1} + \alpha_2*n_{2,t-1}
-$$
-
-The fourth and final size class in time step $t$ ($n_{4,t}$) is defined as:
-
-$$
-n_{4,t} = (1-d_4)n_{4,t-1} + \alpha_3*n_{3,t-1}
-$$
-
-#### Vital Rates
-
-Growth rates are density dependent, using estimated carrying capacity ($K$) and peak *(or average, TBD)* growth rate for size class $i$ ($g_i$) constructed from the literature with a half normal relationship between density and growth. $n_t$ is the total population in time step $t$. Carrying capacity is used to construct the standard deviation of a half-normal distribution (with a mean of 0), $\theta$.
-
-$$
-\sigma = \frac{K*0.975}{1.96}
-$$
-
-$$
-\theta =\frac{\sqrt{\pi/2}}{\sigma}
-$$
-
-Using this $\theta$, I calculated the probability density function of $n_t$ and scaled it by the PDF when density is 0, and then multiplied by the peak growth rate to produce a growth rate for size class $i$ at $n_t$, $\alpha_{i, n_t}$. Using the PDF equation for a half-normal distribution with a mean of 0 and standard deviation $\theta$, this becomes:
-
-$$
-\alpha_{i, n_t} = \frac{\frac{2\theta}{\pi}\exp(\frac{-n_t^2\theta^2}{\pi})}{\frac{2\theta}{\pi}\exp(\frac{0^2\theta^2}{\pi})}*g_i
-$$
-
-$$
-\alpha_{i, n_t} = \frac{\exp(\frac{-n_t^2\theta^2}{\pi})}{\exp(0)}*g_i
-$$
-
-$$
-\alpha_{i, n_t} = \exp(\frac{-n_t^2\theta^2}{\pi})*g_i
-$$
-
-Reproductive rates are also density dependent, and are calculated in the same way as growth rate, with peak reproductive rates for each size class constructed from the literature.
-
-Natural mortality rates are constant for each size class, $d_i$, and are constructed from the literature.
-
-**Details about how natural mortality, peak (or average) growth and reproductive rates were constructed from literature review can be found in vital_rates_lit_review.Rmd doc.**
-
-```{r vital_rates_fun}
 
 
 ##### Vital rates function - use for both growth and reproductive rates
@@ -110,20 +26,11 @@ rates_fun <- function(carrying_capacity,
   return(rate)
 }
 
-# Testing:
-# x <- rates_fun(carrying_capacity = 6000, # from 116 snakes/hectare for 55 hectares
-#           peak_vital_rate = 0.09216, # peak growth rate for small & medium sizes
-#           current_density = 1000) 
-
-```
-
-```{r generating_model_fun}
-
 ### Function to generate population for all size classes in next time step 
 generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 columns for each size class)
-                            growth, # growth rate vector for 3 smaller size classes
-                            mortality, # mortality rate vector for all size classes
-                            reproduction) { # reproductive rate vector for 3 larger size classes
+                         growth, # growth rate vector for 3 smaller size classes
+                         mortality, # mortality rate vector for all size classes
+                         reproduction) { # reproductive rate vector for 3 larger size classes
   # Create vector to hold the current time step's population numbers
   t <- vector() 
   # Calculate small class population (if population is less than 1, set to 0)
@@ -166,125 +73,10 @@ generate_fun <- function(t_minus_1,# The previous time step data (1 row, 4 colum
 
 
 
-```
+#########################################################################################################
+############################## Starting Population Versions
+##########################################################################################
 
-### Generating model experimentation
-
-```{r population_generation}
-
-# Loading vital rates parameters constructed from literature (per Vital_rates_lit_review.Rmd)
-rates_list <- readRDS("vital_rates_lit.rds")
-
-# Separating out vital rates into separate vectors:
-growth_peak_rates <- rates_list$growth_rates
-repro_vector <- rates_list$repro_rates
-mortality_vector <- rates_list$mortality_rates
-
-# Number of years to simulate (with 4 time steps per year)
-Year <- 100
-
-# Starting population
-N <- 6000
-
-# Size classes
-bins <- c("small",
-          "medium",
-          "large",
-          "xlarge")
-n_bins <- length(bins)
-
-# Standard deviation of stochastic process
-sd <- 5
-
-# List of empty matrices to fill with growth and reproduction values drawn for each size class in each year
-vital_rates <- list()
-vital_rates$growth <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
-colnames(vital_rates$growth) <- bins[-4]
-vital_rates$repro <- as.data.frame(matrix(NA, nrow = Year*4, ncol = 3))
-colnames(vital_rates$repro) <- bins[-1]
-
-# Empty matrix to fill with population results for timeseries
-# A column for each size class, plus a totals column
-timeseries <- as.data.frame(matrix(NA, nrow = Year*4, ncol = n_bins+1))
-colnames(timeseries) <- c(bins, "total")
-
-# Time 0 in first row
-timeseries[1, ] <- c(rep(N/4, 4), N)
-
-for(ts in 2:(Year*4)) {
-  # Generate growth rate for this year
-  vital_rates$growth[ts-1, ] <- rates_fun(carrying_capacity = 6000,
-          peak_vital_rate = growth_peak_rates,
-          current_density = timeseries$total[ts-1])
-  vital_rates$repro[ts-1, ] <- rates_fun(carrying_capacity = 6000,
-          peak_vital_rate = repro_vector,
-          current_density = timeseries$total[ts-1])
-  # Generate next time step populations
-  timeseries[ts, 1:4] <- unlist(generate_fun(t_minus_1 = timeseries[ts-1,],
-                                       growth = vital_rates$growth[ts-1, ],
-                                       mortality = mortality_vector,
-                                       reproduction = vital_rates$repro[ts-1, ])) + rnorm(4, 0, sd)
-  timeseries$total[ts] <- sum(timeseries[ts, 1:4])
-}
-
-# Adding year and quarter columns
-timeseries$year <- rep(1:Year, each = 4)
-timeseries$quarter <- rep(paste0("Q", 1:4), Year)
-
-### Plotting all populations to see what's happening
-
-# Melt matrix to make plotting easier
-tm_plot <- melt(timeseries[, -5], id.vars = c("year", "quarter"))
-colnames(tm_plot)[3:4] <- c("size", "pop")
-
-ggplot(tm_plot, aes(fill = quarter, y = pop, x = year)) +
-  geom_bar(position="dodge", stat="identity") +
-  facet_wrap(vars(size)) +
-  theme_bw()
-
-
-## Plotting growth rates for each size class through time
-vital_rates$growth$year <- rep(1:Year, each = 4)
-
-growth_rates_plots <- melt(vital_rates$growth[-(Year*4),], id.vars = c("year"))
-colnames(growth_rates_plots)[2:3] <- c("size", "growth_rate")
-
-ggplot(growth_rates_plots, aes(x = year, y = growth_rate)) +
-  geom_line()+
-  facet_wrap(vars(size)) +
-  theme_bw()
-
-## Plotting reproductive rates for each size class through time
-vital_rates$repro$year <- rep(1:Year, each = 4)
-
-repro_rates_plots <- melt(vital_rates$repro[-(Year*4),], id.vars = c("year"))
-colnames(repro_rates_plots)[2:3] <- c("size", "repro_rate")
-
-ggplot(repro_rates_plots, aes(x = year, y = repro_rate)) +
-  geom_line()+
-  facet_wrap(vars(size)) +
-  theme_bw()
-
-## Plotting proportion of size classes in population
-# Adding timestep to make it easier to plot as continuous through time
-tm_plot$time_step <- rep(1:(Year*4), 4)
-
-init_plot <- ggplot(tm_plot, aes(fill = size, y = pop, x = time_step)) +
-  geom_bar(position="stack", stat="identity") +
-  theme_bw()
-# Saving plot
-ggsave(filename = "initial_pop_plot.png", plot = init_plot,
-       path = here("Results"))
-  
-```
-
-### Sensitivity Analyses
-
-#### Starting population
-
-Trying out a number of different starting populations to see how the model behaves
-
-```{r starting_pop}
 # Starting population list to iterate over 
 N_options <- unique(c(seq(100, 1100, 200), seq(500, 7500, 750))) # 15 scenarios
 # Vector of names for lists of results by starting population
@@ -294,7 +86,7 @@ SP_list_names <- paste0("SP_", N_options)
 # Number of years (with 4 time steps per year)
 Year <- 100
 # Loading vital rates parameters
-rates_list <- readRDS("vital_rates_lit.rds")
+rates_list <- readRDS("Data/vital_rates_lit.rds")
 # Separating out vital rates into separate vectors:
 growth_peak_rates <- rates_list$growth_rates
 repro_vector <- rates_list$repro_rates
@@ -305,8 +97,8 @@ bins <- c("small",
           "large",
           "xlarge")
 n_bins <- length(bins)
-# Standard deviation of stochastic process
-sd <- 5
+# # Standard deviation of stochastic process - not needed for these versions
+# sd <- 5
 
 ### Lists to store vital rates and population by size as they change through time
 all_vital_rates <- list()
@@ -343,7 +135,8 @@ for(sp in 1:length(N_options)) {
     timeseries[ts, 1:4] <- unlist(generate_fun(t_minus_1 = timeseries[ts-1,],
                                                growth = vital_rates$growth[ts-1, ],
                                                mortality = mortality_vector,
-                                               reproduction = vital_rates$repro[ts-1, ])) + rnorm(4, 0, sd)
+                                               reproduction = vital_rates$repro[ts-1, ])) 
+    #+ rnorm(4, 0, sd) - excluding stochasticity for these versions
     timeseries$total[ts] <- sum(timeseries[ts, 1:4])
   }
   # Adding year and quarter columns
@@ -356,7 +149,6 @@ for(sp in 1:length(N_options)) {
   all_vital_rates[[sp]] <- vital_rates
   
 }
-
 names(all_timeseries) <- SP_list_names
 names(all_vital_rates) <- SP_list_names
 
@@ -375,7 +167,7 @@ for(sp in SP_list_names) {
     labs(title = sp)
   #### Saving plots to file
   ggsave(filename = paste0(sp, "_growth.png"), plot = growth_plot,
-       path = here("Results/sensitivity_analyses/starting_pop/Plots/Growth"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots/Growth"))
   
   # Restructuring reproductive rate results for plotting
   all_vital_rates[[sp]]$repro$year <- rep(1:Year, each = 4)
@@ -389,7 +181,7 @@ for(sp in SP_list_names) {
     labs(title = sp)
   #### Saving plots to file
   ggsave(filename = paste0(sp, "_repro.png"), plot = reproductive_plot,
-       path = here("Results/sensitivity_analyses/starting_pop/Plots/Reproduction"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots/Reproduction"))
   
   ## Plotting proportion of size classes in population through timeseries
   # restructuring timeseries data for plotting, and adding timestep
@@ -403,7 +195,7 @@ for(sp in SP_list_names) {
     labs(title = sp)
   #### Saving plots to file
   ggsave(filename = paste0(sp, "_pop.png"), plot = population_plot,
-       path = here("Results/sensitivity_analyses/starting_pop/Plots/Population"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots/Population"))
 }
 
 ### Plots comparing the final population and vital rate values from each starting population scenario
@@ -427,7 +219,8 @@ final_ts_plot <- ggplot(final_pop_melt, aes(y = pop, x = scenario, fill = size))
   theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 # Saving plot
-ggsave(filename = "final_ts_pop_comparison.png", plot = final_ts_plot, path = here("Results/sensitivity_analyses/starting_pop/Plots"))
+ggsave(filename = "final_ts_pop_comparison.png", plot = final_ts_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots"))
 
 # Pulling out final growth rate numbers
 final_growth <- as.data.frame(matrix(NA, nrow = length(N_options), ncol = ncol(all_vital_rates[[1]]$growth)))
@@ -444,11 +237,12 @@ colnames(final_growth_melt)[2:3] <- c("size", "growth_rate")
 final_growth_melt$scenario <- factor(final_growth_melt$scenario, levels = SP_list_names)
 # Creating growth rate plot
 growth_plot <- ggplot(final_growth_melt, aes(x = size, y = growth_rate, fill = scenario)) +
-    geom_bar(position="dodge", stat="identity") +
-    theme_bw()
+  geom_bar(position="dodge", stat="identity") +
+  theme_bw()
 
 # Saving plot
-ggsave(filename = "final_ts_growth_comparison.png", plot = growth_plot, path = here("Results/sensitivity_analyses/starting_pop/Plots"))
+ggsave(filename = "final_ts_growth_comparison.png", plot = growth_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots"))
 
 # Pulling out final reproductive rate numbers
 final_repro <- as.data.frame(matrix(NA, nrow = length(N_options), ncol = ncol(all_vital_rates[[1]]$repro)))
@@ -466,22 +260,16 @@ colnames(final_repro_melt)[2:3] <- c("size", "growth_rate")
 final_repro_melt$scenario <- factor(final_repro_melt$scenario, levels = SP_list_names)
 # Creating growth rate plot
 repro_plot <- ggplot(final_repro_melt, aes(x = size, y = growth_rate, fill = scenario)) +
-    geom_bar(position="dodge", stat="identity") +
-    theme_bw()
+  geom_bar(position="dodge", stat="identity") +
+  theme_bw()
 
 # Saving plot
-ggsave(filename = "final_ts_repro_comparison.png", plot = repro_plot, path = here("Results/sensitivity_analyses/starting_pop/Plots"))
+ggsave(filename = "final_ts_repro_comparison.png", plot = repro_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/starting_pop/Plots"))
 
-
-```
-
-#### Size Distribution
-
-Trying out different starting size distributions to see how that affects the model outputs
-
-The starting population used here is 6000, initially (may change this based on the results, but I don't want the populations to die out too fast if I start too low)
-
-```{r size_dist}
+#########################################################################################################
+############################## Size Distribution Versions
+##########################################################################################
 
 # Starting size distribution
 init_size_dist_options <- list()
@@ -521,7 +309,7 @@ N <- 1000
 # Number of years (with 4 time steps per year)
 Year <- 100
 # Loading vital rates parameters
-rates_list <- readRDS("vital_rates_lit.rds")
+rates_list <- readRDS("Data/vital_rates_lit.rds")
 # Separating out vital rates into separate vectors:
 growth_peak_rates <- rates_list$growth_rates
 repro_vector <- rates_list$repro_rates
@@ -532,8 +320,8 @@ bins <- c("small",
           "large",
           "xlarge")
 n_bins <- length(bins)
-# Standard deviation of stochastic process
-sd <- 5
+# # Standard deviation of stochastic process - not needed for these versions
+# sd <- 5
 
 ### Lists to store vital rates and population by size as they change through time
 all_vital_rates <- list()
@@ -570,7 +358,8 @@ for(ssd in 1:length(init_size_dist_options)) {
     timeseries[ts, 1:4] <- unlist(generate_fun(t_minus_1 = timeseries[ts-1,],
                                                growth = vital_rates$growth[ts-1, ],
                                                mortality = mortality_vector,
-                                               reproduction = vital_rates$repro[ts-1, ])) + rnorm(4, 0, sd)
+                                               reproduction = vital_rates$repro[ts-1, ])) 
+    # + rnorm(4, 0, sd) - excluding stochasticity for these versions
     timeseries$total[ts] <- sum(timeseries[ts, 1:4])
   }
   # Adding year and quarter columns
@@ -602,7 +391,7 @@ for(ssd in SSD_list_names) {
     labs(title = ssd)
   #### Saving plots to file
   ggsave(filename = paste0(ssd, "_growth.png"), plot = growth_plot,
-       path = here("Results/sensitivity_analyses/size_dist/Plots/Growth"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots/Growth"))
   
   # Restructuring reproductive rate results for plotting
   all_vital_rates[[ssd]]$repro$year <- rep(1:Year, each = 4)
@@ -616,7 +405,7 @@ for(ssd in SSD_list_names) {
     labs(title = ssd)
   #### Saving plots to file
   ggsave(filename = paste0(ssd, "_repro.png"), plot = reproductive_plot,
-       path = here("Results/sensitivity_analyses/size_dist/Plots/Reproduction"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots/Reproduction"))
   
   ## Plotting proportion of size classes in population through timeseries
   # restructuring timeseries data for plotting, and adding timestep
@@ -630,7 +419,7 @@ for(ssd in SSD_list_names) {
     labs(title = ssd)
   #### Saving plots to file
   ggsave(filename = paste0(ssd, "_pop.png"), plot = population_plot,
-       path = here("Results/sensitivity_analyses/size_dist/Plots/Population"))
+         path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots/Population"))
 }
 
 ### Plots comparing the final population and vital rate values from each starting population scenario
@@ -654,7 +443,8 @@ final_ts_plot <- ggplot(final_pop_melt, aes(y = pop, x = scenario, fill = size))
   theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 # Saving plot
-ggsave(filename = "final_ts_pop_comparison.png", plot = final_ts_plot, path = here("Results/sensitivity_analyses/size_dist/Plots"))
+ggsave(filename = "final_ts_pop_comparison.png", plot = final_ts_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots"))
 
 # Pulling out final growth rate numbers
 final_growth <- as.data.frame(matrix(NA, nrow = length(init_size_dist_options), ncol = ncol(all_vital_rates[[1]]$growth)))
@@ -671,11 +461,12 @@ colnames(final_growth_melt)[2:3] <- c("size", "growth_rate")
 final_growth_melt$scenario <- factor(final_growth_melt$scenario, levels = SSD_list_names)
 # Creating growth rate plot
 growth_plot <- ggplot(final_growth_melt, aes(x = size, y = growth_rate, fill = scenario)) +
-    geom_bar(position="dodge", stat="identity") +
-    theme_bw()
+  geom_bar(position="dodge", stat="identity") +
+  theme_bw()
 
 # Saving plot
-ggsave(filename = "final_ts_growth_comparison.png", plot = growth_plot, path = here("Results/sensitivity_analyses/size_dist/Plots"))
+ggsave(filename = "final_ts_growth_comparison.png", plot = growth_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots"))
 
 # Pulling out final reproductive rate numbers
 final_repro <- as.data.frame(matrix(NA, nrow = length(init_size_dist_options), ncol = ncol(all_vital_rates[[1]]$repro)))
@@ -693,10 +484,10 @@ colnames(final_repro_melt)[2:3] <- c("size", "growth_rate")
 final_repro_melt$scenario <- factor(final_repro_melt$scenario, levels = SSD_list_names)
 # Creating growth rate plot
 repro_plot <- ggplot(final_repro_melt, aes(x = size, y = growth_rate, fill = scenario)) +
-    geom_bar(position="dodge", stat="identity") +
-    theme_bw()
+  geom_bar(position="dodge", stat="identity") +
+  theme_bw()
 
 # Saving plot
-ggsave(filename = "final_ts_repro_comparison.png", plot = repro_plot, path = here("Results/sensitivity_analyses/size_dist/Plots"))
+ggsave(filename = "final_ts_repro_comparison.png", plot = repro_plot, 
+       path = here("Results/sensitivity_analyses/no_stochasticity/size_dist/Plots"))
 
-```

@@ -65,8 +65,8 @@ $$
 average_growth <- (((16.1*22)+(13.1*14))/36)*3 # converting average monthly mm growth into quarterly
 
 size_class_ranges <- c(850 - 350, 
-                       1150 - 850, 
-                       1250 - 1150)
+                       950 - 850, 
+                       1150 - 950)
 
 growth_rates <- 1/(size_class_ranges/average_growth)
 
@@ -213,6 +213,37 @@ nafus_data$IPM <- read_excel(here("Data/Nafus_2021/BTS Demography Closed Populat
 
 nafus_data$Parents <- read_excel(here("Data/Nafus_2021/BTS Demography Closed Population CP.xlsx"), sheet = "Parents", col_types = c(rep("guess", 3), "date", rep("guess", 8)))
 
+# How many snakes in each of my size classes in her IPM dataset (using second measurement, size t+1, since the first measurement had some NAs)
+IPM_snakes_by_size <- rep(0, 4)
+names(IPM_snakes_by_size) <- c("small", "medium", "large", "xlarge")
+for(snake in 1:nrow(nafus_data$IPM)) {
+  if(nafus_data$IPM$`sizet+1`[snake] <= 850) {
+    IPM_snakes_by_size[1] <- IPM_snakes_by_size[1] + 1
+    nafus_data$IPM$size_class[snake] <- "small"
+  } else if (nafus_data$IPM$`sizet+1`[snake] > 850 & nafus_data$IPM$`sizet+1`[snake] <= 950) {
+    IPM_snakes_by_size[2] <- IPM_snakes_by_size[2] + 1
+    nafus_data$IPM$size_class[snake] <- "medium"
+  } else if (nafus_data$IPM$`sizet+1`[snake] > 950 & nafus_data$IPM$`sizet+1`[snake]<= 1150) {
+    IPM_snakes_by_size[3] <- IPM_snakes_by_size[3] + 1
+    nafus_data$IPM$size_class[snake] <- "large"
+  } else if(nafus_data$IPM$`sizet+1`[snake] > 1150) {
+    IPM_snakes_by_size[4] <- IPM_snakes_by_size[4] + 1
+    nafus_data$IPM$size_class[snake] <- "xlarge"
+  }
+}
+
+### Proportion of snakes in each size class with follicles & with juveniles
+# Total number of females with follicles
+total_follicles <- length(nafus_data$IPM$fec.fol[nafus_data$IPM$fec.fol != 0])
+# Total number of females traced to juveniles
+total_juveniles <- length(nafus_data$IPM$fec.juv[nafus_data$IPM$fec.juv != 0])
+offspring_mom_size <- list()
+offspring_mom_size$follicles <- vector()
+offspring_mom_size$juveniles <- vector()
+if(nafus_data$IPM$fec.fol != 0) {
+  
+}
+
 sires_subset <- nafus_data$Parents[, c(1,4,5)]
 table(sires_subset$Sire)
 
@@ -330,6 +361,6 @@ rates_list <- list(size_class_ranges = size_class_ranges,
                    repro_rates = repro_rates,
                    mortality_rates = mortality_rates)
 
-saveRDS(rates_list, file = "vital_rates_lit.rds")
+saveRDS(rates_list, file = "Data/vital_rates_lit.rds")
 
 ```
