@@ -231,8 +231,8 @@ for(sp in 1:length(SP_list_names)) {
 }
 final_growth$scenario <- SP_list_names
 # Melting data for plotting
-final_growth_melt <- melt(final_growth, id.vars = c("scenario"))
-colnames(final_growth_melt)[2:3] <- c("size", "growth_rate")
+final_growth_melt <- melt(final_growth, id.vars = c("scenario", "year"))
+colnames(final_growth_melt)[3:4] <- c("size", "growth_rate")
 # Making scenarios into ordered factors for clarity
 final_growth_melt$scenario <- factor(final_growth_melt$scenario, levels = SP_list_names)
 # Creating growth rate plot
@@ -254,8 +254,8 @@ for(sp in 1:length(SP_list_names)) {
 final_repro$scenario <- SP_list_names
 
 # Melting data for plotting
-final_repro_melt <- melt(final_repro, id.vars = c("scenario"))
-colnames(final_repro_melt)[2:3] <- c("size", "growth_rate")
+final_repro_melt <- melt(final_repro, id.vars = c("scenario", "year"))
+colnames(final_repro_melt)[3:4] <- c("size", "growth_rate")
 # Making scenarios into ordered factors for clarity
 final_repro_melt$scenario <- factor(final_repro_melt$scenario, levels = SP_list_names)
 # Creating growth rate plot
