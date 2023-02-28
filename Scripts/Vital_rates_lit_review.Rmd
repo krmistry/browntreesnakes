@@ -233,16 +233,46 @@ for(snake in 1:nrow(nafus_data$IPM)) {
 }
 
 ### Proportion of snakes in each size class with follicles & with juveniles
-# Total number of females with follicles
-total_follicles <- length(nafus_data$IPM$fec.fol[nafus_data$IPM$fec.fol != 0])
-# Total number of females traced to juveniles
-total_juveniles <- length(nafus_data$IPM$fec.juv[nafus_data$IPM$fec.juv != 0])
+# Subsetting for females with follicles
+follicle_moms <- nafus_data$IPM[nafus_data$IPM$fec.fol != 0,]
+# Subsetting for females with juveniles
+juvenile_moms <- nafus_data$IPM[nafus_data$IPM$fec.juv != 0,]
+
 offspring_mom_size <- list()
-offspring_mom_size$follicles <- vector()
-offspring_mom_size$juveniles <- vector()
-if(nafus_data$IPM$fec.fol != 0) {
-  
+offspring_mom_size$follicles$total_moms <- nrow(follicle_moms)
+offspring_mom_size$juveniles$total_moms <- nrow(juvenile_moms)
+offspring_mom_size$follicles$proportions <- rep(0, 3)
+offspring_mom_size$juveniles$proportions <- rep(0, 3)
+
+for(snake in 1:nrow(follicle_moms)) {
+  if(follicle_moms$size_class[snake] == "medium") {
+  offspring_mom_size$follicles$proportions[1] <- offspring_mom_size$follicles$proportions[1] + 1
+  } else if(follicle_moms$size_class[snake] == "large") {
+  offspring_mom_size$follicles$proportions[2] <- offspring_mom_size$follicles$proportions[2] + 1
+  } else if(follicle_moms$size_class[snake] == "xlarge") {
+  offspring_mom_size$follicles$proportions[3] <- offspring_mom_size$follicles$proportions[3] + 1
+  }
 }
+
+offspring_mom_size$follicles$proportions <- offspring_mom_size$follicles$proportions/nrow(follicle_moms)
+
+for(snake in 1:nrow(juvenile_moms)) {
+  if(juvenile_moms$size_class[snake] == "medium") {
+  offspring_mom_size$juveniles$proportions[1] <- offspring_mom_size$juveniles$proportions[1] + 1
+  } else if(juvenile_moms$size_class[snake] == "large") {
+  offspring_mom_size$juveniles$proportions[2] <- offspring_mom_size$juveniles$proportions[2] + 1
+  } else if(juvenile_moms$size_class[snake] == "xlarge") {
+  offspring_mom_size$juveniles$proportions[3] <- offspring_mom_size$juveniles$proportions[3] + 1
+  }
+}
+
+offspring_mom_size$juveniles$proportions <- offspring_mom_size$juveniles$proportions/nrow(juvenile_moms)
+
+# Proportion of each size class that had follicles or juveniles
+prop_moms <- list()
+prop_moms$follicles <- (offspring_mom_size$follicles$proportions*nrow(follicle_moms))/IPM_snakes_by_size[2:4]
+prop_moms$juveniles <- (offspring_mom_size$juveniles$proportions*nrow(juvenile_moms))/IPM_snakes_by_size[2:4]
+
 
 sires_subset <- nafus_data$Parents[, c(1,4,5)]
 table(sires_subset$Sire)
@@ -281,17 +311,22 @@ all_clutch_size <- date_by_dam[date_by_dam != 0, drop = FALSE]
 ### Sexual maturity at each size category
 # Large and x-large size classes are all sexually mature, and medium is mixed
 # Based on Savidge et al. 2007: 90% of females are sexually mature between 910 and 1,025 mm SVL; Assuming 5% probability of sexual maturity below 910, and 100% above 1,025 (so between 1,025 and 1,150 for medium size class)
-size_range <- 1150 - 850
-part_1 <- ((910-850)/size_range)*0.05
-part_2 <- ((1025-910)/size_range)*0.9
-part_3 <- ((1150-1025)/size_range)
+size_range <-  c((950-850), (1150-950))
+maturity_0.9_limits <- c(910, 1025)
 
-medium_prob <- part_1 + part_2 + part_3 # Assumes uniform distribution of snake sizes within the size class - likely a safe assumption at high density, probably not at low
-sexual_maturity <- c("medium" = medium_prob, "large" = 1, "xlarge" = 1)
+med_part_1 <- ((910-850)/size_range[1])*0.05
+med_part_2 <- ((950-910)/size_range[1])*(0.9*((950-maturity_0.9_limits[1])/(maturity_0.9_limits[2] -  maturity_0.9_limits[1])))
+
+large_part_1 <- ((1025-950)/size_range[2])*(0.9*((maturity_0.9_limits[2]- 950)/(maturity_0.9_limits[2] -  maturity_0.9_limits[1])))
+large_part_2 <- ((1150-1025)/size_range[2])
+
+# Assumes uniform distribution of snake sizes within the size class - likely a safe assumption at high density, probably not at low
+sexual_maturity <- c("medium" = med_part_1 + med_part_2, "large" = large_part_1 + large_part_2, "xlarge" = 1)
 
 ### Number of females in population who reproduce 
 # Possibly the least amount of data available for this, and none for x-large so for now will use large for x-large as well. Based on Nafus data,(3 out of 5 large snakes and 12 out of 83 medium snakes traced to juveniles):
-reproducing_females <- c(12/83, 3/5, 3/5)
+reproducing_females <- c(prop_moms$juveniles[2], # in data set, there are 0, but to be conservative, I'll use the large proportion
+                         prop_moms$juveniles[2:3])
 
 ### Probability a reproducing female produces a clutch in a quarter
 # No size information available; use one value for all sizes, see if I can get more data through Amy
@@ -361,6 +396,6 @@ rates_list <- list(size_class_ranges = size_class_ranges,
                    repro_rates = repro_rates,
                    mortality_rates = mortality_rates)
 
-saveRDS(rates_list, file = "Data/vital_rates_lit.rds")
+saveRDS(rates_list, file = here("Data/vital_rates_lit.rds"))
 
 ```
