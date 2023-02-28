@@ -1,0 +1,167 @@
+---
+title: "Individual-based Generating Model"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(reshape2)
+library(ggplot2)
+```
+
+## Individual-based Generating Model
+
+Initial conditions and rough model structure:
+
+-   25 individuals to start (to run faster)
+
+-   Time step is days
+
+-   In each time step, each individual:
+
+    -   Has a probability of growing (Poisson based on the Gompertz growth function? Not quite sure yet, start with a static value as the Poisson lambda)
+
+        -   Maybe this should be a Bernoulli too - sometimes there's no growth, and that could be relatively easy to add density dependence to; $p$ would change based on the density, so the probability of growing at all changes, independent of the actual growth rate
+
+    -   Has a probability of reproducing (Bernoulli, then Poisson for number of offspring? Or just Poisson?)
+
+        -   Same as for growth, having a Bernoulli element might make density dependence easier to incorporate
+
+    -   Has a probability of dying from natural causes (Bernoulli)
+
+-   Initial run time is 90 days (\~1 quarter); may need to run it longer to get much population movement, but start with this
+
+```{r gen_model_toy}
+
+set.seed(18)
+
+# Setting up initial population:
+init_pop <- as.data.frame(matrix(NA, nrow = 25, ncol = 3))
+colnames(init_pop) <- c("ID", "SVL", "sex")
+
+init_pop$ID <- paste0("A", sample(1000:9000, 25))
+init_pop$SVL <- c(sample(350:850, 10), sample(851:950, 5), sample(951:1150, 5), sample(1151:1600, 5)) # initial size dist is 40% small, and 20% medium, large and x-large
+init_pop$sex <- sample(c("M", "F"), 25, replace = T)
+
+#### For now, just using static vital rates
+# Growth rate in mm/day taken directly from Nafus et al. 2021 (sex specific)
+small_growth <- c("M" = 1.18, "F" = 0.98) # less than 750 mm SVL
+medium_growth <- c("M" = 0.56, "F" = 0.46) # 750 - 999
+large_growth <- c("M" = 0.52, "F" = 0.29) # greater than or equal to 1,000
+
+# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
+density_prob <- 0.75 # to operate stochastically, growth can't be 100% guaranteed
+
+
+# Short time step of the model to start with and list for populations in each time step (1 quarter)
+time_step <- 90
+timeseries_pop <- list()
+
+# Just growing individuals - first step, do they grow? Bernoulli (density dependent - start with no density dependence, so yes they grow), then if yes, how much do they grow? Normal or Gamma, maybe? Oh, don't want growth to be negative, so not normal - maybe gamma would work
+
+timeseries_pop[[1]] <- init_pop
+
+for(day in 1:time_step) {
+  pop <- timeseries_pop[[day]]
+  for(snake in 1:nrow(pop)) {
+    if (rbinom(1, 1, prob = density_prob) == 1) {
+      if (pop$SVL[snake] < 750) {
+        if (pop$sex[snake] == "M") {
+          pop$SVL[snake] <- pop$SVL[snake] + small_growth[1]
+        } else {
+          pop$SVL[snake] <- pop$SVL[snake] + small_growth[2]
+        }
+      } else if (pop$SVL[snake] >= 750 & pop$SVL[snake] < 1000) {
+        if (pop$sex[snake] == "M") {
+          pop$SVL[snake] <- pop$SVL[snake] + medium_growth[1]
+        } else {
+          pop$SVL[snake] <- pop$SVL[snake] + medium_growth[2]
+        }
+      } else {
+        if (pop$sex[snake] == "M") {
+          pop$SVL[snake] <- pop$SVL[snake] + large_growth[1]
+        } else {
+          pop$SVL[snake] <- pop$SVL[snake] + large_growth[2]
+        }
+      }
+    } else {
+      pop$SVL[snake] <- pop$SVL[snake]
+    }
+  }
+  timeseries_pop[[day + 1]] <- pop
+}     
+names(timeseries_pop) <- paste0("day_", c(1:(time_step + 1)))
+
+# Melting timeseries into a single dataframe
+all_days <- melt(timeseries_pop, id.vars = c("ID", "sex"))
+colnames(all_days)[4:5] <- c("SVL", "time_step")
+all_days$time_step <- factor(all_days$time_step, levels = names(timeseries_pop))
+
+# Plotting results
+ggplot(all_days, aes(x = time_step, y = SVL, color = ID)) +
+  geom_jitter()
+
+# Isolating and graphing one snake
+snake <- all_days[all_days$ID == all_days$ID[22],]
+ggplot(snake, aes(x = time_step, y = SVL)) +
+  geom_jitter() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+## Reproduction - occurs every 90 days; two ways to do this, either in one step or two. In the two step version, the first step is do they reproduce? Then, if they do, the number of offspring comes from a Poisson distribution. Same as with growth, this might make density dependence easier to incorporate by doing this in the first step. Alternatively, this could be done in a single step, with a draw from a Poisson
+
+# Isolate the last data frame of the population's growth in the first quarter 
+pop_end_Q <- as.data.frame(tail(timeseries_pop, n = 1))
+colnames(pop_end_Q) <- colnames(timeseries_pop[[1]])
+# Extracting the females from this population
+females <- pop_end_Q[pop_end_Q$sex == "F",]
+
+# Setting up the probability of reproduction for each snake based on their size
+# For now, it's based on Savidge et al. 2007 findings, which indicated that 90% of female snakes reached sexual maturity between 910 and 1,025 SVL
+for(snake in 1:nrow(females)) {
+  if(females$SVL[snake] < 910) {
+    females$repro_prob[snake] <- 0
+  } else if (females$SVL[snake] >= 910 & females$SVL[snake] < 1025) {
+    females$repro_prob[snake] <- 0.9
+  } else {
+    females$repro_prob[snake] <- 1
+  }
+}
+
+# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
+r_density_prob <- 0.75 # to operate stochastically, reproduction can't be 100% guaranteed
+
+# Counter to keep track of the number of new snakes
+total_offspring <- 0
+
+# Two step version, with a coin flip for whether or not reproduction occurs
+for(snake in 1:nrow(females)) {
+  # Coin flip of whether reproduction occurs is based on both density dependence and the probablity that the individual snake will be able to reproduce based on it's size
+  if (rbinom(1, 1, prob = density_prob*females$repro_prob[snake]) == 1) {
+    females$mom_status[snake] <- 1
+  } else {
+    females$mom_status[snake] <- 0
+  }
+}
+
+# Version one - using the same value for lambda for all sizes (could separate this out into size buckets, or maybe even could make it continuous based on Nafus data)
+total_offspring <- sum(rpois(sum(females$mom_status), 2.3))
+
+# Creating empty dataframe to put offspring data into
+offspring <- as.data.frame(matrix(NA, nrow = total_offspring, ncol = 3))
+colnames(offspring) <- c("ID", "SVL", "sex")
+# Filling in IDs, hatchling size (with some variation) and random sex
+offspring$ID <- paste0("B", sample(1000:9000, total_offspring))
+offspring$SVL <- sample(350:400, total_offspring)
+offspring$sex <- sample(c("M", "F"), total_offspring, replace = T)
+
+## Adding the new snakes into the general population dataframe
+new_timeseries_pop <- rbind(timeseries_pop[[91]], offspring)
+
+
+
+```
