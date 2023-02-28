@@ -34,6 +34,61 @@ Initial conditions and rough model structure:
 
 -   Initial run time is 90 days (\~1 quarter); may need to run it longer to get much population movement, but start with this
 
+```{r growth_function}
+
+## This first version has linear growth, and the entire function will probably change when I get around to making growth non-linear (with the Gompertz functions from the growth paper)
+
+## Inputs
+# smale - 1 snake, i.e. one row of dataframe of current population (columns are ID, sex and size)
+# density_prob - probability (0 - 1) for the Bernoulli probability for whether or not growth occurs
+# growth_rates - dataframe of 3 linear growth rates (for small, medium and large snakes' growth) for each sex, constructed using Nafus et al. 2021 values ---- THIS WILL CHANGE
+
+
+## Growth rates for linear, size-based growth (based on Nafus et al. 2021 rates, which were distinct for these size bins: <750, 750 - 1000 and >1000 (different from my size bins)
+growth_rate <- as.data.frame(matrix(NA, nrow = 3, ncol = 2, 
+                                    dimnames = list(c("small", "medium", "large"),
+                                                    c("M", "F"))))
+growth_rate[1, ] <- c(1.18, 0.98) # less than 750 mm SVL
+growth_rate[2, ] <- c(0.56, 0.46) # 750 - 999
+growth_rate[3, ] <- c(0.52, 0.29) # greater than or equal to 1,000 
+
+daily_growth_fun <- function(snake, 
+                             density_prob,
+                             growth_rate) {
+  if (rbinom(1, 1, prob = density_prob) == 1) {
+      if (snake$SVL < 750) {
+        if (snake$sex == "M") {
+          snake$SVL <- snake$SVL + growth_rate[1, 1]
+        } else {
+          snake$SVL <- snake$SVL + growth_rate[1, 2]
+        }
+      } else if (snake$SVL >= 750 & snake$SVL < 1000) {
+        if (snake$sex == "M") {
+          snake$SVL <- snake$SVL + growth_rate[2, 1]
+        } else {
+          snake$SVL <- snake$SVL + growth_rate[2, 2]
+        }
+      } else {
+        if (snake$sex == "M") {
+          snake$SVL <- snake$SVL + growth_rate[3, 1]
+        } else {
+          snake$SVL <- snake$SVL + growth_rate[3, 2]
+        }
+      }
+    } else {
+      snake$SVL <- snake$SVL
+    }
+  return(snake)
+}
+
+
+# Test
+daily_growth_fun(timeseries_pop[[1]][1, ], 
+                             0.75,
+                             growth_rate)
+
+```
+
 ```{r gen_model_toy}
 
 set.seed(18)
@@ -53,7 +108,7 @@ medium_growth <- c("M" = 0.56, "F" = 0.46) # 750 - 999
 large_growth <- c("M" = 0.52, "F" = 0.29) # greater than or equal to 1,000
 
 # Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-density_prob <- 0.75 # to operate stochastically, growth can't be 100% guaranteed
+g_density_prob <- 0.75 # to operate stochastically, growth can't be 100% guaranteed
 
 
 # Short time step of the model to start with and list for populations in each time step (1 quarter)
@@ -64,10 +119,10 @@ timeseries_pop <- list()
 
 timeseries_pop[[1]] <- init_pop
 
-for(day in 1:time_step) {
+for(day in 1:(time_step-1)) {
   pop <- timeseries_pop[[day]]
   for(snake in 1:nrow(pop)) {
-    if (rbinom(1, 1, prob = density_prob) == 1) {
+    if (rbinom(1, 1, prob = g_density_prob) == 1) {
       if (pop$SVL[snake] < 750) {
         if (pop$sex[snake] == "M") {
           pop$SVL[snake] <- pop$SVL[snake] + small_growth[1]
@@ -93,7 +148,7 @@ for(day in 1:time_step) {
   }
   timeseries_pop[[day + 1]] <- pop
 }     
-names(timeseries_pop) <- paste0("day_", c(1:(time_step + 1)))
+names(timeseries_pop) <- paste0("day_", c(1:time_step))
 
 # Melting timeseries into a single dataframe
 all_days <- melt(timeseries_pop, id.vars = c("ID", "sex"))
@@ -112,7 +167,7 @@ ggplot(snake, aes(x = time_step, y = SVL)) +
 
 
 
-## Reproduction - occurs every 90 days; two ways to do this, either in one step or two. In the two step version, the first step is do they reproduce? Then, if they do, the number of offspring comes from a Poisson distribution. Same as with growth, this might make density dependence easier to incorporate by doing this in the first step. Alternatively, this could be done in a single step, with a draw from a Poisson
+## Reproduction - occurs every 90 days; two ways to do this, either in one step or two. In the two step version, the first step is do they reproduce? Then, if they do, the number of offspring comes from a Poisson distribution. Same as with growth, this might make density dependence easier to incorporate by doing this in the first step. Alternatively, this could be done in a single step, with a draw from a Poisson, after isolating the females that could reproduce size-wise
 
 # Isolate the last data frame of the population's growth in the first quarter 
 pop_end_Q <- as.data.frame(tail(timeseries_pop, n = 1))
@@ -135,13 +190,10 @@ for(snake in 1:nrow(females)) {
 # Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
 r_density_prob <- 0.75 # to operate stochastically, reproduction can't be 100% guaranteed
 
-# Counter to keep track of the number of new snakes
-total_offspring <- 0
-
 # Two step version, with a coin flip for whether or not reproduction occurs
 for(snake in 1:nrow(females)) {
   # Coin flip of whether reproduction occurs is based on both density dependence and the probablity that the individual snake will be able to reproduce based on it's size
-  if (rbinom(1, 1, prob = density_prob*females$repro_prob[snake]) == 1) {
+  if (rbinom(1, 1, prob = r_density_prob*females$repro_prob[snake]) == 1) {
     females$mom_status[snake] <- 1
   } else {
     females$mom_status[snake] <- 0
@@ -160,8 +212,41 @@ offspring$SVL <- sample(350:400, total_offspring)
 offspring$sex <- sample(c("M", "F"), total_offspring, replace = T)
 
 ## Adding the new snakes into the general population dataframe
-new_timeseries_pop <- rbind(timeseries_pop[[91]], offspring)
+new_timeseries_pop <- rbind(timeseries_pop[[length(timeseries_pop)]], offspring)
 
+## Natural mortality - using one day timeseries (post-growth) and size-based mortality rates (current version is that the probability is constant for each of the size-structured model size bins, and the first version here is totally arbitrary)
 
+# Totally arbitrary mortality rates for each size class
+N_mortality <- c("small" = 0.2,
+                  "medium" = 0.1,
+                  "large" = 0.1,
+                  "xlarge" = 0.3)
+
+# Creating empty vector to hold IDs fo dead snakes
+dead_snakes <- vector()
+
+for(snake in 1:nrow(timeseries_pop[[1]])) {
+  if(timeseries_pop[[1]]$SVL[snake] <= 850) {
+    if (rbinom(1, 1, prob = N_mortality[1]) == 1) { 
+      dead_snakes[snake] <- timeseries_pop[[1]]$ID[snake]
+    }
+  } else if (timeseries_pop[[1]]$SVL[snake] > 850 & timeseries_pop[[1]]$SVL[snake] <= 950) {
+    if (rbinom(1, 1, prob = N_mortality[2]) == 1) { 
+      dead_snakes[snake] <- timeseries_pop[[1]]$ID[snake]
+    }
+  } else if (timeseries_pop[[1]]$SVL[snake] > 950 & timeseries_pop[[1]]$SVL[snake] <= 1150) {
+    if (rbinom(1, 1, prob = N_mortality[3]) == 1) { 
+      dead_snakes[snake] <- timeseries_pop[[1]]$ID[snake]
+    } 
+  } else if (timeseries_pop[[1]]$SVL[snake] > 1150) {
+    if (rbinom(1, 1, prob = N_mortality[4]) == 1) { 
+      dead_snakes[snake] <- timeseries_pop[[1]]$ID[snake]
+    }
+  }
+}
+
+dead_snakes <- dead_snakes[!is.na(dead_snakes)]
+
+new_timeseries_pop_2 <- timeseries_pop[[1]][!timeseries_pop[[1]]$ID %in% dead_snakes,]
 
 ```
