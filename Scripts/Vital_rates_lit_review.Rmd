@@ -373,7 +373,7 @@ predation <- (2/119)/2
 unknown_mortality <- (6/119)/2
 
 ### Calculating mortality due to age (assuming 10 - 15 year lifespan), to add only into x-large mortality
-quarters_to_XL <- (1250-350)/44.8
+quarters_to_XL <- (1150-350)/44.8
 maximum_lifespan <- 60 # 15 years, in quarters
 age_mortality <- 1/(maximum_lifespan - quarters_to_XL)
 

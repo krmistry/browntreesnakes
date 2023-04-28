@@ -11,6 +11,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(reshape2)
 library(ggplot2)
 library(dplyr)
+library(here)
+library(tictoc)
+library(fdrtool)
 ```
 
 ## Individual-based Generating Model
@@ -35,12 +38,12 @@ Initial conditions and rough model structure:
 
 -   Initial run time is 90 days (\~1 quarter); may need to run it longer to get much population movement, but start with this
 
-```{r growth_function}
+```{r linear_growth_fun}
 
 ## This first version has linear growth, and the entire function will probably change when I get around to making growth non-linear (with the Gompertz functions from the growth paper)
 
 ## Inputs
-# small - 1 snake, i.e. one row of dataframe of current population (columns are ID, sex and size)
+# snake - 1 snake, i.e. one row of dataframe of current population (columns are ID, sex and size)
 # density_prob - probability (0 - 1) for the Bernoulli probability for whether or not growth occurs
 # growth_rates - dataframe of 3 linear growth rates (for small, medium and large snakes' growth) for each sex, constructed using Nafus et al. 2021 values ---- THIS WILL CHANGE
 
@@ -53,7 +56,7 @@ growth_rate[1, ] <- c(1.18, 0.98) # less than 750 mm SVL
 growth_rate[2, ] <- c(0.56, 0.46) # 750 - 999
 growth_rate[3, ] <- c(0.52, 0.29) # greater than or equal to 1,000 
 
-daily_growth_fun <- function(snake, 
+daily_linear_growth_fun <- function(snake, 
                              density_prob,
                              growth_rate) {
   if (rbinom(1, 1, prob = density_prob) == 1) {
@@ -84,11 +87,140 @@ daily_growth_fun <- function(snake,
 
 
 # Test
-# daily_growth_fun(timeseries_pop[[1]][1, ], 
+# daily_linear_growth_fun(timeseries_pop[[1]][1, ], 
 #                             0.75,
 #                             growth_rate)
 
 ```
+
+#### Gompertz growth function
+
+Trying out using coefficients from Brian and Bjorn's work to see if I can create a plausible Gompertz growth curve for the simulated snakes. 3/23 - I can :D :D :D :D :D
+
+```{r gompertz_growth_fun}
+
+# Format of the function:
+# y = a + b*log(prior_SVL/700)
+# a is sex determined, but b is not
+# There are different a and b values for each quantile; I'll be using the quantiles that reach sexual maturity, so 0.25 and higher
+gompertz_coefficients <- list()
+tau <- paste0("tau_", c(0.25, 0.5, 0.75, 0.9, 0.95))
+for(i in 1:length(tau)) {
+  gompertz_coefficients[[i]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+  colnames(gompertz_coefficients[[i]]) <- c("F", "M")
+  rownames(gompertz_coefficients[[i]]) <- c("intercept", "slope", "intercept_SE", "slope_SE"  )
+}
+names(gompertz_coefficients) <- tau
+# Manually populating each matrix using Cade's coefficient results (intercepts are averages)
+# tau = 0.25
+gompertz_coefficients[[1]]$F <- c(0.20213130, # intercept
+                                  -0.52878937, # slope (same for both sexes)
+                                  0.01089347, # intercept SE
+                                  0.01922998) # slope SE (same for both sexes)
+gompertz_coefficients[[1]]$M <- c(0.20213130 + 0.05100731, 
+                                  -0.52878937, 
+                                  0.01345507, 
+                                  0.01922998)
+
+# tau = 0.5
+gompertz_coefficients[[2]]$F <- c(0.28056394, 
+                                  -0.55530229, 
+                                  0.01284185, 
+                                  0.01876979)
+gompertz_coefficients[[2]]$M <- c(0.28056394 + 0.07215225, 
+                                  -0.55530229, 
+                                  0.01593324, 
+                                  0.01876979)
+
+# tau = 0.75
+gompertz_coefficients[[3]]$F <- c(0.3817238, 
+                                  -0.6409609, 
+                                  0.01292154, 
+                                  0.02458514)
+gompertz_coefficients[[3]]$M <- c(0.3817238 + 0.05100731, 
+                                  -0.6409609, 
+                                  0.01703584, 
+                                  0.02458514)
+
+# tau = 0.9
+gompertz_coefficients[[4]]$F <- c(0.5498842, 
+                                  -0.7398035, 
+                                  0.02166973, 
+                                  0.03856088)
+gompertz_coefficients[[4]]$M <- c(0.5498842+0.05100731, 
+                                  -0.7398035, 
+                                  0.02581472, 
+                                  0.03856088)
+
+# tau = 0.95
+gompertz_coefficients[[5]]$F <- c(0.6224156, 
+                                  -0.8061105, 
+                                  0.04408919, 
+                                  0.05613037)
+gompertz_coefficients[[5]]$M <- c(0.6224156 + 0.1634791, 
+                                  -0.8061105, 
+                                  0.05512590, 
+                                  0.05613037)
+
+# Calculate the asymptotic values for each of these growth curves (in order to make sure that an inappropriate quantile isn't assigned if a snake has a large SVL in the initial population)
+
+gompertz_asymptotes <- list()
+for(i in 1:length(tau)) {
+  gompertz_asymptotes[[i]] <- vector()
+  gompertz_asymptotes[[i]][1] <- 700*exp(-gompertz_coefficients[[i]]$F[1]/gompertz_coefficients[[i]]$F[2])
+  gompertz_asymptotes[[i]][2] <- 700*exp(-gompertz_coefficients[[i]]$M[1]/gompertz_coefficients[[i]]$M[2])
+  names(gompertz_asymptotes[[i]]) <- c("F", "M")
+}
+names(gompertz_asymptotes) <- tau
+# # Testing to see what this will produce if used to grow a snake
+# snake_size <- vector()
+# snake_size[[1]] <- 350
+# days <- 5500 #~15 years, so the potential lifespan
+# for(day in 1:days) {
+#   snake_size[day+1] <- snake_size[day] + gompertz_coefficients$tau_0.25$F[1] + gompertz_coefficients$tau_0.25$F[2]*log(snake_size[day]/700)
+# }
+# snake_growth <- as.data.frame(cbind(snake_size, c(1:(days+1))))
+# colnames(snake_growth) <- c("SVL", "Day")
+# 
+# ggplot(snake_growth, aes(x = Day, y = SVL)) +
+#   geom_line()
+# 
+# # It looks like it's doing what it should! :D :D :D
+
+# Creating the gompertz growth function:
+
+daily_gompertz_growth_fun <- function(snake, 
+                                      density_prob,
+                                      gompertz_coefs) {
+   if (rbinom(1, 1, prob = density_prob) == 1) {
+     # Selecting correct growth coefficients based on sex and growth quantile
+     growth_coefs <- gompertz_coefficients[[snake$growth_quant]][snake$sex]
+     # Snake grows
+     snake$SVL <- snake$SVL + growth_coefs[1,] + growth_coefs[2,]*log(snake$SVL/700)
+   } else {
+     snake$SVL <- snake$SVL
+   }
+  return(snake)
+}
+
+
+```
+
+### Reproduction
+
+-   Occurs once per quarter, and the females that reproduce in a given quarter do not grow and are not available to natural mortality
+
+-   There are two pieces to determining how many offspring are produced:
+
+    -   Bernoulli draw to determine if a female reproduces (this parameter will be the place that density dependence can be added)
+
+    -   For females that reproduce, a Poisson draw with lambda = 2.3 determines how many offspring each individual produces
+
+-   Offspring join the population at the beginning of the next quarter
+
+    -   Beginning sizes drawn from a U(350,400))
+
+    -   Sex is randomly assigned, with 50% probability
 
 ```{r reproduction_fun}
 
@@ -96,39 +228,46 @@ daily_growth_fun <- function(snake,
 
 ## Each step needs its own function (so that the females not selected to reproduce can stay in the general population and go through the growth and mortality for loop)
 
+
+# Setting up the probability of reproduction for each snake based on their size
+# For now, it's based on Savidge et al. 2007 findings, which indicated that 90% of female   snakes reached sexual maturity between 910 and 1,025 SVL (doesn't mean that each            snake has a 90% probability of reproducing in that quarter though - LOOK AT THIS   AGAIN    LATER, it definitely needs to be revised)
+# Using 90% confidence intervals for sexual maturity to calculate standard deviation and mean 
+maturity_mean <- 910 + (1025-910)/2
+maturity_sd <- (1025-910)/3.29
+
+maturity_fun <- function(snake_SVL) {
+    if(snake_SVL < 910) {
+      maturity <- 0
+    } else if (snake_SVL >= 910 & snake_SVL < 1025) {
+      maturity <- pnorm(snake_SVL, maturity_mean, maturity_sd)
+    } else {
+      maturity <- 1
+    }
+  return(maturity)
+}
+
+
 #### First reproduction function: extracting females that will reproduce in this quarter
 
 ## Inputs
 # start_pop <- dataframe of population at the start of the quarter (columns are ID, sex and size)
 # density_prob - probability (0 - 1) for the Bernoulli probability for whether or not snake reproduces in this quarter
 
-
 repro_females_fun <- function(start_pop,
                              density_prob) {
   # Extracting the females from this population
   females <- start_pop[start_pop$sex == "F",]
-  # Setting up the probability of reproduction for each snake based on their size
-  # For now, it's based on Savidge et al. 2007 findings, which indicated that 90% of female   snakes reached sexual maturity between 910 and 1,025 SVL (doesn't mean that each            snake has a 90% probability of reproducing in that quarter though - LOOK AT THIS   AGAIN    LATER, it definitely needs to be revised)
+  # Coin flip for whether or not reproduction occurs
   for(snake in 1:nrow(females)) {
-    if(females$SVL[snake] < 910) {
-      females$repro_prob[snake] <- 0
-    } else if (females$SVL[snake] >= 910 & females$SVL[snake] < 1025) {
-      females$repro_prob[snake] <- 0.9
-    } else {
-      females$repro_prob[snake] <- 1
-    }
-  }
-  # Two step version, with a coin flip for whether or not reproduction occurs
-  for(snake in 1:nrow(females)) {
-  # Coin flip of whether reproduction occurs is based on both density dependence and the     probablity that the individual snake will be able to reproduce based on it's size
-    if (rbinom(1, 1, prob = r_density_prob*females$repro_prob[snake]) == 1) {
+  # Coin flip of whether reproduction occurs is based on both density dependence and the     probablity that the individual snake will be able to reproduce based on its size
+    if (rbinom(1, 1, prob = density_prob*females$repro_prob[snake]) == 1) {
       females$mom_status[snake] <- 1
     } else {
       females$mom_status[snake] <- 0
     }
   }
   moms <- females[females$mom_status == 1,]
-  return(moms[c(1:3)])
+  return(select(moms, -c("mom_status")))
 }
 
 ### Inputs
@@ -142,11 +281,11 @@ gen_offspring_fun <- function(mom_pop,
   # Creating empty dataframe to put offspring data into
   offspring <- as.data.frame(matrix(NA, nrow = total_offspring, ncol = 3))
   colnames(offspring) <- c("ID", "SVL", "sex")
-  # Filling in IDs, hatchling size (with some variation) and random sex
-  if(time_step <= 26) {
+  # Filling in IDs, hatchling size (with some variation), sex, reproductive probability (0), and randomly selecting a growth quantile
+  if(time_step <= 25) {
     offspring$ID <- paste0(letters[time_step + 1], 
                            sample(1000:9000, total_offspring))
-  } else if(time_step > 26 & time_step <= 52) {
+  } else if(time_step >= 26 & time_step <= 52) {
     offspring$ID <- paste0(letters[1], 
                            letters[time_step - 26], 
                            sample(1000:9000, total_offspring))
@@ -160,8 +299,10 @@ gen_offspring_fun <- function(mom_pop,
                            sample(1000:9000, total_offspring))
   }
   
-  offspring$SVL <- sample(350:400, total_offspring, replace = T)
+  offspring$SVL <- runif(total_offspring, 350, 400)
   offspring$sex <- sample(c("M", "F"), total_offspring, replace = T)
+  offspring$repro_prob <- 0
+  offspring$growth_quant <- sample(growth_quantiles, total_offspring, replace = T)
   
   ## Combining the offspring with mothers and return as one dataframe
   return(offspring)
@@ -185,12 +326,11 @@ gen_offspring_fun <- function(mom_pop,
 # pop - dataframe of population (columns are ID, sex and size)
 # mortality_rate - vector of linear daily natural mortality rates (completely made up for now - REVISIT THIS LATER)
 
-# Totally arbitrary mortality rates for each size class
-N_mortality <- c("small" = 0.002,
-                  "medium" = 0.001,
-                  "large" = 0.001,
-                  "xlarge" = 0.003)
-
+# Mortality rates for each size class, based on data from Nafus et al. 2021 (not including life span cutoff for now, we'll see how it goes and add it if snakes are living too long)
+N_mortality <- c("small" = 0.001,
+                  "medium" = 0.0004,
+                  "large" = 0.0004,
+                  "xlarge" = 0.0004)
 
 daily_mortality_fun <- function(pop) {
   # Creating empty vector to hold IDs fo dead snakes
@@ -229,27 +369,176 @@ daily_mortality_fun <- function(pop) {
 
 ```
 
-```{r gen_model_toy}
+#### Density dependence of vital rates (growth and reproduction)
+
+The Bernoulli draw for both growth and reproduction should be influenced by density dependence. My first attempt at this will use the pdf of the half-normal distribution, scaled to produce a 0 - 1 value (with 0 indicating no density dependence, and 1 indicating that the population is at carrying capacity)
+
+Density estimates from various sources, at different times (use to create default estimates for density per hectare and to create estimates of carrying capacity)
+
+-   Rodda and Savidge, 2007:
+
+    -   Estimated peak density in favorable habitats in the 1980s was probably \>100/ha
+
+        -   In this period, the bird species were being extirpated, and this level of density meant that carrying capacity was exceeded once the prey species were depleted. Individual snake condition abruptly became skinnier in the early 1980s
+
+    -   The population appeared to reach a dynamic equilibrium at "roughly half the estimated peak density in the 1980s" - so \~50/ha? The population appears to be stable since then
+
+-   Rodda et al. 1992:
+
+    -   Estimated from multiple study sites around the western and northern parts of the island, surveyed from 1985 - 1990:
+
+        -   Using CAPTURE software and mark-recapture data, they calculated these densities in different study areas:
+
+            -   Northern Guam: 20/ha (16.5 - 24) in 1.88 ha area in 1985, 34/ha (7 - 62) in 1.5 ha area in 1989. Extrapolating from that, they estimate that a total of 119/ha and using a different calculation, 112/ha
+
+            -   Central Guam: 63/ha (45 - 108) for a 2 ha study area using Schumacher technique, CAPTURE estimated 58/ha (18 - 97) - although the CAPTURE assumptions were violated, but in small ways
+
+                -   Central had had snakes for longer, so during this study period, snakes had probably already peaked (birds and bats were already depleted)
+
+        -   
+
+```{r density_dependence_fun}
+
+DD_param_fun <- function(carrying_capacity,
+                      current_density) {
+  # Calculate sigma for scaling standard deviation using carrying capacity
+  sd <- (carrying_capacity*0.975)/1.96
+  # Calculate PDF when density is 0 (highest density probability value)
+  max_prob_value <- dhalfnorm(0, theta = ((sqrt(pi/2))/sd)) 
+  # Calculate PDF value for the current density
+  PDf_value <- dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
+  # Calculate PDF value for the current density
+  PDf_value <- dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
+  # Use maximum value to scale current density's PDF value and produce A parameter
+  A <- (PDf_value/max_prob_value)
+  return(A)
+}
+
+
+
+```
+
+#### Initial population function
+
+```{r init_pop_fun}
+
+init_pop_fun <- function(init_N, 
+                         init_size_dist,
+                         growth_quantiles,
+                         gompertz_asymptotes) {
+  # Checking that the init_N multiplied by the init_size_dist values is the same as init_N,   and if it's not than init_N is slightly adjusted (runif will round these values below and   it won't match up if I don't do this)
+  if(init_N != sum(round(init_N*init_size_dist))) {
+    init_N <- sum(round(init_N*init_size_dist))
+  } else {
+    init_N <- init_N
+  }
+  
+  # Setting up initial population dataframe:
+  init_pop <- as.data.frame(matrix(NA, nrow = init_N, ncol = 5))
+  colnames(init_pop) <- c("ID", "SVL", "sex", "repro_prob", "growth_quant")
+  # Creating initial population characteristics
+  init_pop$ID <- paste0("A", sample(1000:9000, init_N))
+  init_pop$SVL <- c(runif(init_N*init_size_dist[1], 350, 850), 
+                    runif(init_N*init_size_dist[2], 851, 950),
+                    runif(init_N*init_size_dist[3], 951, 1150), 
+                    runif(init_N*init_size_dist[4], 1151, 1600))
+  init_pop$sex <- sample(c("M", "F"), init_N, replace = T)
+  # Using SVL to determine probability of sexual maturity (only relevant for females, but easier to calculate for all - don't keep this long term though, it might be confusing)
+  # At the same time, randomly assign each individual to a growth quantile - initially, each of the 5 possible quantiles will be equally probable (0.25, 0.5, 0.75, 0.9, 0.95), depending on if their starting SVL is below the asymptote of the quantile
+  for(snake in 1:nrow(init_pop)) {
+    # Set up reproductive probability value for each individual
+    init_pop$repro_prob[snake] <- maturity_fun(init_pop$SVL[snake])
+    # Set up growth quantiles for each individual, based on starting SVL
+    if (init_pop$SVL[snake] <= min(gompertz_asymptotes$tau_0.25)) {
+      init_pop$growth_quant[snake] <- sample(growth_quantiles, 1)
+    } else if (init_pop$SVL[snake] <= min(gompertz_asymptotes$tau_0.5)) {
+      init_pop$growth_quant[snake] <- sample(growth_quantiles[-1], 1)
+    } else if (init_pop$SVL[snake] <= min(gompertz_asymptotes$tau_0.75)) {
+      init_pop$growth_quant[snake] <- sample(growth_quantiles[-c(1:2)], 1)
+    } else if (init_pop$SVL[snake] <= min(gompertz_asymptotes$tau_0.9)) {
+      init_pop$growth_quant[snake] <- sample(growth_quantiles[-c(1:3)], 1)
+    } else {
+      init_pop$growth_quant[snake] <- sample(growth_quantiles[-c(1:4)], 1)
+    }
+  }
+  return(init_pop)
+}
+
+# # Test
+# x <- init_pop_fun(init_N, init_size_dist, growth_quantiles, gompertz_asymptotes)
+```
+
+```{r results_formatting_fun}
+
+## Formatting results for plotting by quarter
+results_format_fun <- function(quarter_results) {
+  # Melt quarter timeseries into a single dataframe
+  all_quarters <- melt(quarter_results, id.vars = c("ID", "sex", "repro_prob", "growth_quant"))
+  colnames(all_quarters)[6:7] <- c("SVL", "Quarter")
+  
+  # Adding size distribution to combined quarters dataframe
+  for(snake in 1:nrow(all_quarters)) {
+    if(all_quarters$SVL[snake] <= 850) {
+      all_quarters$size_category[snake] <- "small"
+    } else if(all_quarters$SVL[snake] > 850 & all_quarters$SVL[snake] <= 950) {
+      all_quarters$size_category[snake] <- "medium"
+    } else if(all_quarters$SVL[snake] > 950 & all_quarters$SVL[snake] <= 1150) {
+      all_quarters$size_category[snake] <- "large"
+    } else {
+      all_quarters$size_category[snake] <- "xlarge"
+    }
+  }
+  # Factoring size category column for graphing
+  all_quarters$size_category <- factor(all_quarters$size_category, 
+                                       levels = c("small", "medium", "large", "xlarge"))
+  
+  # Return results 
+  return(all_quarters)
+}
+
+
+```
+
+```{r gen_model}
 
 set.seed(18)
 
-# Setting up initial population:
-init_pop <- as.data.frame(matrix(NA, nrow = 25, ncol = 3))
-colnames(init_pop) <- c("ID", "SVL", "sex")
+# Set study/eradication area size, which dictates both K and the initial population
+area_size <- 10
 
-init_pop$ID <- paste0("A", sample(1000:9000, 25))
-init_pop$SVL <- c(sample(350:850, 10), sample(851:950, 5), sample(951:1150, 5), sample(1151:1600, 5)) # initial size dist is 40% small, and 20% medium, large and x-large
-init_pop$sex <- sample(c("M", "F"), 25, replace = T)
+# Set carrying capacity for this population:
+K <- 119*area_size
 
-# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-g_density_prob <- 0.75 # to operate stochastically, growth can't be 100% guaranteed
+# Set up initial population size:
+init_N <- 50*area_size
 
-# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-r_density_prob <- 0.75 # to operate stochastically, reproduction can't be 100% guaranteed
+# Initial size distribution:
+init_size_dist <- c("small" = 0.25,
+                    "medium" = 0.25,
+                    "large" = 0.25,
+                    "xlarge" = 0.25)
 
-# Two time steps will be used, one for days in the quarter and the other for number of quarters, which is initially set to 4 (one year)
+# Possible growth quantiles that can be assigned to each snake
+growth_quantiles <- paste0("tau_", c(0.25, 0.5, 0.75, 0.9, 0.95))
+
+# Setting up initial population
+init_pop <- init_pop_fun(init_N, init_size_dist, growth_quantiles, gompertz_asymptotes)
+
+# Two time steps will be used, one for the number of quarters, the other for number of days in the quarter
+quarter_time_step <- 80
 day_time_step <- 90
-quarter_time_step <- 4
+
+
+# Set initial value for density dependence parameter (this will update in loops as total population changes)
+DD_param <- DD_param_fun(carrying_capacity = K, 
+                         current_density = init_N) 
+## Right now the same density dependent function will be used for both growth and reproduction; this may be changed easily by changing the constant in the equation (0.75 for both is the value I started with)
+
+# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
+g_density_prob <- 0.75 # 3/23 - 0.75*DD_param meant that no snakes born in the simulation grew past small, so that obviously isnt' going to work trying increasing the constant to 1 to see what that does; nope, 1*DD_param does the same thing
+
+# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
+r_density_prob <- 0.75*DD_param # to operate stochastically, reproduction can't be 100% guaranteed
 
 # Empty lists to put population from each time step in (initially recording everything, eventually I'll only need one, for the quarter time step)
 quarter_timeseries_pop <- list()
@@ -262,229 +551,101 @@ quarter_timeseries_pop[[1]] <- init_pop
 # Setting up empty dataframe to record IDs for reproducing females in each quarter
 repro_females_timeseries <- list()
 
+tic("20 years")
 for(quarter in 1:quarter_time_step) {
+  tic(paste0("Quarter ", quarter))
   # Isolate reproducing females for this quarter; after first quarter, check for the females   who reproduced last quarter and skip them this quarter
   if (quarter == 1) {
     moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
                             density_prob = r_density_prob)
   } else {
     recent_mom_IDs <- repro_females_timeseries[[quarter - 1]]$ID
+    # Update density dependent parameter & r_density
+    current_N <- nrow(quarter_timeseries_pop[[quarter]])
+    DD_param <- DD_param_fun(K, current_N)
+    r_density_prob <- 0.75*DD_param
+    # Choose which females will reproduce
     moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
                             density_prob = r_density_prob)
   }
-  
+  # If no reproductive females available, then stop loop and go to next starting value
+  if(nrow(moms) < 1) {
+    print("0 reproducing females")
+    break
+  }
   # Producing new offspring to join population at the end   of the quarter
   offspring <- gen_offspring_fun(mom_pop = moms,
                               time_step = quarter)
-  # Excluding reproducing females from population about to go through growth and mortality   for the quarter
-  daily_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% moms$ID, ]
-  # Producing daily growth and mortality for 90 days
+  
+  ## Growth and mortality on a daily scale within the quarter 
+  daily_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter]]
+  # Loop for each day in 90 days
   for(day in 1:(day_time_step-1)) {
-  pop <- daily_timeseries_pop[[day]]
-  for(snake in 1:nrow(pop)) {
-    pop[snake,] <- daily_growth_fun(pop[snake,], 
+    #  All snakes are exposed to natural mortality
+    pop <- daily_timeseries_pop[[day]]
+    surviving_pop <- daily_mortality_fun(pop)
+    # Excluding reproductive females to create population who has the potential to grow in this quarter
+    growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
+    # Separating out surviving moms to add back in after growth
+    surviving_moms <- surviving_pop[surviving_pop$ID %in% moms$ID, ]
+    ## Each snake grows (or not) based on it's individual growth quantile
+    # First, updating density dependent growth parameter; currently set to consider the whole population, including reproductive females (could make it just the growing population)
+    # DD_day_param <- DD_param_fun(K, nrow(surviving_pop))
+    # g_density_prob <- 1*DD_day_param
+    # Now, growth occurs (or doesn't)
+    for(snake in 1:nrow(growing_pop)) {
+    growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
                                    g_density_prob,
-                                   growth_rate)
+                                   gompertz_coefficients)
+    }
+  daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
   }
-  surviving_pop <- daily_mortality_fun(pop)
-  daily_timeseries_pop[[day + 1]] <- surviving_pop
-  }     
   names(daily_timeseries_pop) <- paste0("day_", c(1:day_time_step))
-  
-  # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter
-  quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[day_time_step]], moms, offspring)
-  
+
   # Keeping track of which females reproduced in which quarters (next step will be to use     this to exclude females who've reproduced in the last 2 quarters)
   repro_females_timeseries[[quarter]] <- moms
+  
+  # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter
+  quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[day_time_step]], offspring)
+  # Updating sexual maturity status after the quarter's worth of growth
+  for(snake in 1:nrow(quarter_timeseries_pop[[quarter + 1]])) {
+    quarter_timeseries_pop[[quarter + 1]]$repro_prob[snake] <- maturity_fun(quarter_timeseries_pop[[quarter + 1]]$SVL[snake])
+  }
+  toc()
 }
-
-
+toc() # 8 min to run 5 years with initial N = 1,250 and K = 4,165 (max pop was 2,602)
 
 # Melting daily timeseries (only the 90 days in the final quarter) into a single dataframe
-all_days <- melt(daily_timeseries_pop, id.vars = c("ID", "sex"))
-colnames(all_days)[4:5] <- c("SVL", "time_step")
+all_days <- melt(daily_timeseries_pop, id.vars = c("ID", "sex", "repro_prob", "growth_quant"))
+colnames(all_days)[6:7] <- c("SVL", "time_step")
 all_days$time_step <- factor(all_days$time_step, levels = names(daily_timeseries_pop))
 
-# Melt quarter timeseries into a single dataframe
-all_quarters <- melt(quarter_timeseries_pop, id.vars = c("ID", "sex"))
-colnames(all_quarters)[4:5] <- c("SVL", "Quarter")
 
-# Adding size distribution to combined quarters dataframe
-for(snake in 1:nrow(all_quarters)) {
-  if(all_quarters$SVL[snake] <= 850) {
-    all_quarters$size_category[snake] <- "small"
-  } else if(all_quarters$SVL[snake] > 850 & all_quarters$SVL[snake] <= 950) {
-    all_quarters$size_category[snake] <- "medium"
-  } else if(all_quarters$SVL[snake] > 950 & all_quarters$SVL[snake] <= 1150) {
-    all_quarters$size_category[snake] <- "large"
-  } else {
-    all_quarters$size_category[snake] <- "xlarge"
-  }
-}
-# Factoring size category column for graphing
-all_quarters$size_category <- factor(all_quarters$size_category, 
-                                     levels = c("small", "medium", "large", "xlarge"))
-
-# Plotting results for individual snake growth for daily timeseries
-ggplot(all_days, aes(x = time_step, y = SVL, color = ID)) +
-  geom_point()
-
-# Plotting all results for individual snake growth over quarter timeseries
-ggplot(all_quarters, aes(x = Quarter, y = SVL, color = ID)) +
-  geom_point() +
-  geom_line()
+# Formating quarter results for plotting
+all_quarters <- results_format_fun(quarter_timeseries_pop)
 
 # Plotting the total population in each quarter
-ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
+plot_1 <- ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
   geom_bar()
 
-# Isolating and graphing one snake
-snake <- all_days[all_days$ID == all_days$ID[22],]
-ggplot(snake, aes(x = time_step, y = SVL)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# # Isolating and graphing one snake
+# snake <- all_days[all_days$ID == all_days$ID[22],]
+# ggplot(snake, aes(x = time_step, y = SVL)) +
+#   geom_point() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-
+# Saving versions of the timeseries if needed
+saveRDS(quarter_timeseries_pop, file = here("Data/quarter_timeseries_3.23.23_DD.rds"))
+saveRDS(daily_timeseries_pop, file = here("Data/daily_timeseries_3.23.23_DD.rds"))
 
 ```
 
-Now that the toy version is working (with 25 individuals), now to try it with a few hundred, for a slightly more realistic version to see how long it takes to run.
+Checking the resulting population to see if the density, size distribution, and the vital rates make sense and match our knowledge of BTS
 
-Running the model for 20 years (80 quarters) with an initial population of 300 took just under 5 minutes.
+```{r initial_model_validation}
 
-```{r full_gen_model}
-
-set.seed(89)
-
-# Initial population size:
-init_N <- 300
-
-# Initial size distribution:
-init_size_dist <- c("small" = 0.4,
-                    "medium" = 0.2,
-                    "large" = 0.2,
-                    "xlarge" = 0.2)
-
-# Setting up initial population:
-init_pop <- as.data.frame(matrix(NA, nrow = init_N, ncol = 3))
-colnames(init_pop) <- c("ID", "SVL", "sex")
-
-init_pop$ID <- paste0("A", sample(1000:9000, init_N))
-init_pop$SVL <- c(sample(350:850, (init_N*init_size_dist[1])), 
-                  sample(851:950, (init_N*init_size_dist[2])), 
-                  sample(951:1150, (init_N*init_size_dist[3])), 
-                  sample(1151:1600, (init_N*init_size_dist[4]))) 
-init_pop$sex <- sample(c("M", "F"), init_N, replace = T)
-
-# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-g_density_prob <- 0.75 # to operate stochastically, growth can't be 100% guaranteed
-
-# Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-r_density_prob <- 0.75 # to operate stochastically, reproduction can't be 100% guaranteed
-
-# Two time steps will be used, one for days in the quarter and the other for number of quarters, which is initially set to 4 (one year)
-day_time_step <- 90
-quarter_time_step <- 80 # 20 years
-
-
-# Empty lists to put population from each time step in (initially recording everything, eventually I'll only need one, for the quarter time step)
-quarter_timeseries_pop <- list()
-daily_timeseries_pop <- list()
-
-# Setting up first population
-quarter_timeseries_pop[[1]] <- init_pop
-# Setting up empty dataframe to record IDs for reproducing females in each quarter
-repro_females_timeseries <- list()
-
-for(quarter in 1:quarter_time_step) {
-  # Isolate reproducing females for this quarter; after first quarter, check for the females   who reproduced last quarter and skip them this quarter
-  if (quarter == 1) {
-    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
-                            density_prob = r_density_prob)
-  } else {
-    recent_mom_IDs <- repro_females_timeseries[[quarter - 1]]$ID
-    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
-                            density_prob = r_density_prob)
-  }
-  
-  # Producing new offspring to join population at the end   of the quarter
-  offspring <- gen_offspring_fun(mom_pop = moms,
-                              time_step = quarter)
-  # Excluding reproducing females from population about to go through growth and mortality   for the quarter
-  daily_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% moms$ID, ]
-  # Producing daily growth and mortality for 90 days
-  for(day in 1:(day_time_step-1)) {
-  pop <- daily_timeseries_pop[[day]]
-  for(snake in 1:nrow(pop)) {
-    pop[snake,] <- daily_growth_fun(pop[snake,], 
-                                   g_density_prob,
-                                   growth_rate)
-  }
-  surviving_pop <- daily_mortality_fun(pop)
-  daily_timeseries_pop[[day + 1]] <- surviving_pop
-  }     
-  names(daily_timeseries_pop) <- paste0("day_", c(1:day_time_step))
-  
-  # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter 
-  quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[day_time_step]], moms, offspring)
-  
-  # Keeping track of which females reproduced in which quarters 
-  repro_females_timeseries[[quarter]] <- moms
-}
-
-
-
-# Melting daily timeseries (only the 90 days in the final quarter are saved) into a single dataframe
-all_days <- melt(daily_timeseries_pop, id.vars = c("ID", "sex"))
-colnames(all_days)[4:5] <- c("SVL", "time_step")
-all_days$time_step <- factor(all_days$time_step, levels = names(daily_timeseries_pop))
-
-# Melt quarter timeseries into a single dataframe
-all_quarters <- melt(quarter_timeseries_pop, id.vars = c("ID", "sex"))
-colnames(all_quarters)[4:5] <- c("SVL", "Quarter")
-
-# Adding size distribution to combined quarters dataframe
-for(snake in 1:nrow(all_quarters)) {
-  if(all_quarters$SVL[snake] <= 850) {
-    all_quarters$size_category[snake] <- "small"
-  } else if(all_quarters$SVL[snake] > 850 & all_quarters$SVL[snake] <= 950) {
-    all_quarters$size_category[snake] <- "medium"
-  } else if(all_quarters$SVL[snake] > 950 & all_quarters$SVL[snake] <= 1150) {
-    all_quarters$size_category[snake] <- "large"
-  } else {
-    all_quarters$size_category[snake] <- "xlarge"
-  }
-}
-# Factoring size category column for graphing
-all_quarters$size_category <- factor(all_quarters$size_category, 
-                                     levels = c("small", "medium", "large", "xlarge"))
-
-# # Plotting results for individual snake growth for daily timeseries
-# # Subsetting randomly to get a smaller number of snakes (dol)
-# 
-# ggplot(all_days_subset, aes(x = time_step, y = SVL, color = ID)) +
-#   geom_point()
-# 
-# # Plotting all results for individual snake growth over quarter timeseries, for subset (plotting all )
-# ggplot(all_quarters, aes(x = Quarter, y = SVL, color = ID)) +
-#   geom_point() +
-#   geom_line()
-
-# Plotting the total population and size distribution in each quarter
-ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
-  geom_bar()
-
-# Isolating and graphing one snake
-snake <- 
-ggplot(snake, aes(x = time_step, y = SVL)) +
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-
-# Saving the first version with 300 individuals for 20 years (both the quarters and daily timeseries') to look at next week without having to re-run everything
-saveRDS(quarter_timeseries_pop, file = here("Data/quarter_timeseries_3.3.23.rds"))
-saveRDS(daily_timeseries_pop, file = here("Data/daily_timeseries_3.3.23.rds"))
-
+### Model checking
+model_validation <- list()
 
 ## What proportion of females reproduced each quarter?
 mom_rate <- vector()
@@ -492,15 +653,24 @@ for(quarter in 1:length(repro_females_timeseries)) {
   mom_rate[quarter] <- nrow(repro_females_timeseries[[quarter]])/nrow(quarter_timeseries_pop[[quarter + 1]][quarter_timeseries_pop[[quarter + 1]]$sex == "F", ])
 }
 
-summary(mom_rate) # mean = 12.4%, min = 8% and max = 29%
+model_validation$mom_rate <- mom_rate
+
+# summary(mom_rate) # mean = 12.4%, min = 8% and max = 29%
+# For massive reproduction on 3/17: mean = 10.6%, min = 6.8% and max = 26%
+# First DD run: mean = 6.5%, min = 3.2%, max = 24%
+# With DD & gompertz growth, area = 5 ha; mean = 6%, min = 1.7%, max = 21%
 
 ## How many offspring were added each quarter?
 offspring_per_quarter <- vector()
 for(quarter in 2:length(quarter_timeseries_pop)) {
   offspring_per_quarter[quarter - 1] <- nrow(quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% quarter_timeseries_pop[[quarter - 1]]$ID,])
 }
+model_validation$offspring <- offspring_per_quarter
 
-summary(offspring_per_quarter) # mean = 72, min = 36 and max = 127
+# summary(offspring_per_quarter) # mean = 72, min = 36 and max = 127
+# For 3/17 enormous run: mean = 1,337, median = 541, min = 33, max = 6,662
+# First DD run: mean = 79, min = 27, max = 157
+# For DD & gompertz growth, area = 5; mean = 30.23, min = 6, max = 73
 
 ## How many died in each quarter?
 mortality_rate <- vector()
@@ -509,7 +679,12 @@ for(quarter in 1:(length(quarter_timeseries_pop)-1)) {
     nrow(quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% quarter_timeseries_pop[[quarter + 1]]$ID,])/nrow(quarter_timeseries_pop[[quarter]])
 }
 
-summary(mortality_rate) # mean = 14%, min = 11% and max = 20% -- DEFINITELY too high
+model_validation$mortality_rate <- mortality_rate
+
+# summary(mortality_rate) 
+# For 3/17 enormous run: mean = 6.2%, min = 4.6%, max = 7%
+# First DD run: mean = 5.4%%, min = 3%, max = 8.5%
+# For DD & gompertz, area = 5; mean = 6%, min = 2.8%, max = 10%
 
 ## What is the lifespan of individuals? (just the ones that have been born within the simulation - the burn in period in the future might be to run until the original individuals have all died)
 
@@ -520,7 +695,44 @@ for(snake in 1:length(unique(new_all_Qs$ID))) {
   lifespan_quarters[snake] <- nrow(new_all_Qs[new_all_Qs$ID == new_all_Qs$ID[snake],])
 }
 
-summary(lifespan_quarters) # Mean = 12.5 (3.1 years), min = 1 and max = 65 (16.25 years)
+model_validation$lifespan_quart <- lifespan_quarters
+
+# summary(lifespan_quarters) # Mean = 12.5 (3.1 years), min = 1 and max = 65 (16.25 years)
+# 3/17 massive run: mean = 28.85 (7.2 years), min = 1 and max = 80 (20 years - also the length of the run, so might need to put a maximum age after all)
+# First DD run: mean = 25.9 (6.5 years), min = 1, max = 80 
+# For DD & gompertz, area = 5; mean = 20.24 (~5 years), min = 1, max = 80
+
+# How many quarters do snakes stay in each size bracket?
+#age_by_size <- list()
+sizes <- c("small", "medium", "large", "xlarge")
+
+age_by_size <- as.data.frame(matrix(NA, nrow = length(unique(new_all_Qs$ID)), 
+                                              ncol = 5))
+colnames(age_by_size) <- c("ID", "num_Q_small", "num_Q_medium", "num_Q_large",
+                                     "num_Q_xlarge")
+for(snake in 1:length(unique(new_all_Qs$ID))){
+  snake_data <- new_all_Qs[new_all_Qs$ID == unique(new_all_Qs$ID)[snake], ] 
+  age_by_size[snake, 1] <- snake_data$ID[1]
+  for(size in 1:length(size)) {
+    age_by_size[snake, (size + 1)] <- nrow(snake_data[snake_data$size_category == sizes[size],])
+  }
+}
+
+average_age_by_size <- vector()
+for(size in 1:length(sizes)) {
+  average_age_by_size[size] <- mean(age_by_size[, (size + 1)])
+}
+names(average_age_by_size) <- sizes
+
+model_validation$average_age_by_size <- average_age_by_size
+
+# For first DD run, average time spent in each size category: small = 1.2 years, medium = 1/3 of a year, large = 3/5 of a year, xlarge = 1 year
+# For DD & gompertz growth, area = 5; small = 2 years, medium = 1/4 of a year, large = 2/5 of a year, xlarge = ~1/3 of a year
+
+model_validation$prop_over_60_quart <- length(lifespan_quarters[lifespan_quarters > 60])/length(lifespan_quarters)
+# For 3/17 massive run: 7% - I don't know, maybe this is okay (max size is more important anyway)
+# For first DD run: 12.9%
+# For DD & gompertz growth, area = 5; 7.5%
 
 # Maximum size reached (also only for snakes born in the simulation)
 max_size <- vector()
@@ -528,7 +740,44 @@ for(snake in 1:length(unique(new_all_Qs$ID))) {
   max_size[snake] <- max(new_all_Qs$SVL[new_all_Qs$ID == new_all_Qs$ID[snake]])
 }
 
-summary(max_size) # Mean = 867.6, min = 351 and max = 2,056
+model_validation$max_size <- max_size
+# summary(max_size) # Mean = 867.6, min = 351 and max = 2,056
+# From 3/17 massive run: mean = 1298, min = 350, max = 3289; so the max is waaayyy too high, not surprisingly since growth is currently linear
+# First DD run: mean = 1264.3, min = 350.7, max = 3382.2
+# For DD & gompertz growth, area = 5; mean = 834, min = 350.4, max = 1734.9 - better, in terms of realistic max sizes (although I think they have been known to get bigger)
+
+## Select snakes that survived for more than 40 quarters and graph their growth trajectories
+LL_snakes <- all_quarters[0,]
+for(snake in 1:length(unique(all_quarters$ID))) {
+  snake_ts <- all_quarters[all_quarters$ID == unique(all_quarters$ID)[snake], ]
+  if(nrow(snake_ts) >= 40) {
+  LL_snakes <- rbind(LL_snakes, snake_ts)
+  }
+}
+
+# How many snakes lived more than 10 years
+model_validation$LL_snakes$proportion <- length(unique(LL_snakes$ID))/length(unique(new_all_Qs$ID)) # 222
+# Sample a subset to graph if there are more than 50
+plot_snake_IDs <- sample(unique(LL_snakes$ID), 25)
+plot_snakes <- all_quarters[all_quarters$ID %in% plot_snake_IDs,]
+
+# Plot the subset of individual snakes
+LL_plot <- ggplot(plot_snakes, aes(x = Quarter, y = SVL, color = ID)) +
+  geom_path()
+
+model_validation$LL_snakes$LL_plot <- LL_plot
+
+# Summarizing the above model validation info
+mv_table <- as.data.frame(matrix(NA, nrow = 3, ncol = 5))
+colnames(mv_table) <- c("mom_rate", "num_offspring", "mortality_rate", "lifespan", "max_SVL")
+rownames(mv_table) <- c("min", "mean", "max")
+mv_table$mom_rate_per_quarter <- summary(model_validation$mom_rate)[c(1,4,6)]
+mv_table$offspring_per_quarter <- summary(model_validation$offspring)[c(1,4,6)]
+mv_table$mortality_rate_per_quarter <- summary(model_validation$mortality_rate)[c(1,4,6)]
+mv_table$lifespan_in_quarters <- summary(model_validation$lifespan_quart)[c(1,4,6)]
+mv_table$max_SVL <- summary(model_validation$max_size)[c(1,4,6)]
+
+mv_table_2 <- list()
 
 
 ```
@@ -540,7 +789,7 @@ Using different starting populations to see how the population performs through 
 ```{r starting_pop_variation}
 
 # Starting population list to iterate over 
-N_options <- seq(100, 1100, 200) # 15 scenarios
+N_options <- seq(100, 1100, 200) # 6 scenarios
 # Vector of names for lists of results by starting population
 SP_list_names <- paste0("SP_", N_options)
 
@@ -567,16 +816,22 @@ all_repro_females <- list()
 
 ### Loop for running full model with different starting populations (100 - 1,100)
 for(init_N in 1:length(N_options)) {
+  # Starting timer for loop:
+  tic(paste0("Starting Population ", N_options[init_N]))
   # Setting up initial population:
   init_pop <- as.data.frame(matrix(NA, nrow = N_options[init_N], ncol = 3))
   colnames(init_pop) <- c("ID", "SVL", "sex")
   # Creating unique IDs, randomly sampled sizes with specified size distribution, and     randomly selected sex
   init_pop$ID <- paste0("A", sample(1000:9000, N_options[init_N]))
-  init_pop$SVL <- c(sample(350:850, (N_options[init_N]*init_size_dist[1]), replace = T), 
-                  sample(851:950, (N_options[init_N]*init_size_dist[2]), replace = T), 
-                  sample(951:1150, (N_options[init_N]*init_size_dist[3]), replace = T), 
-                  sample(1151:1600, (N_options[init_N]*init_size_dist[4]), replace = T)) 
+  init_pop$SVL <- c(runif(N_options[init_N]*init_size_dist[1], 350, 850), 
+                    runif(N_options[init_N]*init_size_dist[2], 851, 950),
+                    runif(N_options[init_N]*init_size_dist[3], 951, 1150), 
+                    runif(N_options[init_N]*init_size_dist[4], 1151, 1600)) 
   init_pop$sex <- sample(c("M", "F"), N_options[init_N], replace = T)
+  for(snake in 1:nrow(init_pop)) {
+    init_pop$repro_prob[snake] <- maturity_fun(init_pop$SVL[snake])
+  }
+
   
   # Empty lists to put population from each time step in (initially recording everything, eventually I'll only need one, for the quarter time step)
   quarter_timeseries <- list()
@@ -599,6 +854,12 @@ for(init_N in 1:length(N_options)) {
                             density_prob = r_density_prob)
   }
   
+  # If no reproductive females available, then stop loop and go to next starting value
+  if(nrow(moms) < 1) {
+    print("0 reproducing females")
+    break
+  }
+    
   # Producing new offspring to join population at the end   of the quarter
   offspring <- gen_offspring_fun(mom_pop = moms,
                               time_step = quarter)
@@ -617,18 +878,25 @@ for(init_N in 1:length(N_options)) {
   }     
   names(daily_timeseries) <- paste0("day_", c(1:day_time_step))
   
+  # Keeping track of which females reproduced in which quarters 
+  repro_females[[quarter]] <- moms
+  
   # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter 
   quarter_timeseries[[quarter + 1]] <- rbind(daily_timeseries[[day_time_step]], 
                                              moms, offspring)
-  
-  # Keeping track of which females reproduced in which quarters 
-  repro_females[[quarter]] <- moms
+  # Updating sexual maturity status after the quarter's worth of growth
+  for(snake in 1:nrow(quarter_timeseries[[quarter + 1]])) {
+    quarter_timeseries[[quarter + 1]]$repro_prob[snake] <- maturity_fun(quarter_timeseries[[quarter + 1]]$SVL[snake])
+    }
   }
   
   # Saving last day, quarter and reproducing mom IDs to appropriate lists
   all_quarter_timeseries[[init_N]] <- quarter_timeseries
   all_daily_timeseries[[init_N]] <- daily_timeseries
   all_repro_females[[init_N]] <- repro_females
+  
+  # Stop timer for loop
+  toc()
 }
 
 names(all_quarter_timeseries) <- SP_list_names
@@ -644,8 +912,8 @@ saveRDS(all_repro_females, here("Data/start_pop_all_repro_females.rds"))
 
 for(N in 1:length(N_options)) {
   # Melt quarter timeseries into a single dataframe
-  all_quarters <- melt(all_quarter_timeseries[[N]], id.vars = c("ID", "sex"))
-  colnames(all_quarters)[4:5] <- c("SVL", "Quarter")
+  all_quarters <- melt(all_quarter_timeseries[[N]], id.vars = c("ID", "sex", "repro_prob"))
+  colnames(all_quarters)[5:6] <- c("SVL", "Quarter")
 
   # Adding size distribution to combined quarters dataframe
   for(snake in 1:nrow(all_quarters)) {
@@ -669,6 +937,268 @@ for(N in 1:length(N_options)) {
   # Saving plot
   ggsave(paste0(here("Results/starting_pop_"), SP_list_names[N], "_ts_plot.png"))
 }
+
+
+
+```
+
+### Eradication methods
+
+The primary eradicaton methods are:
+
+-   ADS
+
+    -   Sizes affected: there's a minimum size based on prey attraction (only snakes that have converted to eating mammals will eat the neonatal mice baits), and less well defined maximum size (large snakes are unlikely to be attracted to the neonatal mice because they're too small, and the really large ones may not be killed by the standard acetaminophen dose)
+
+        -   To start with, 850 is the minimum and 1200 is the maximum *(based on my instinct - check this later)*
+
+    -   Coverage percentage: defined by how much of the area is seeded with baits, and this is solely determining the encounter probability for now (100% coverage assumes that all snakes will encounter a bait)
+
+        -   50% as default to start with
+
+    -   Mortality probability:
+
+        -   Based on the size affected range - 0 outside that range, and a high probability if encountered: 95% as default *(based on my instinct, check this later)*
+
+    -   Effective time (amount of time after application when death may occur): the mice baits decompose quite quickly, so they'll only be available to be eaten for a short time.
+
+        -   2 days is the default to start with *(based on my instinct - check this later)*
+
+    -   Number of applications in 30 day period:
+
+        -   3 applications in 3 weeks *(based on my instinct - check this later)*
+
+    -   Basic elements of equations:
+
+        -   coverage determines how many snakes could encounter a bait (percentage of coverage = percentage of snakes, so assuming even distribution), then using a bernoulli to determine how many of those encounter it
+
+        -   For parameter in Bernoulli: encounter probability is based on size (0 outside the size affected range, and the same probability for all others to start with)
+
+        -   Mortality if encountered is another Bernoulli:
+
+        -   In the day loop, have 3 applications 7 days apart in 1 quarter per year for final 2 years of time series to start with (to give the population a burn in period - eventually this may be unnecessary, and I could just run for the period of time that the applications are actively occurring, hopefully)
+
+-   Visual survey
+
+    -   Sizes affected: all sizes, although I should look to see if there is some variation in detection based on size
+
+        -   Default is equal detection for all sizes
+
+    -   Coverage: how many transects, and how much of the area is covered based on an expected amount of area covered in each transect
+
+        -   50% coverage as default *(based on my instinct - check this later)*
+
+    -   Effective time:
+
+-   Live traps
+
+    -   Sizes affected:
+
+    -   Coverage:
+
+    -   Effective time:
+
+-   Bait tubes
+
+    -   Sizes affected:
+
+    -   Coverage:
+
+    -   Effective time:
+
+#### Effort 
+
+All of the eradication methods needs to include a metric for effort - I think it should all be in the same units, probably. Area covered is one type of effort, which I'm already using, but is that good enough?
+
+```{r eradication_methods_fun}
+
+# Size limits for snakes affected for each eradication method
+erad_methods_size_affected <- list()
+erad_methods_size_affected$ADS <- c(850, 1200)
+erad_methods_size_affected$visual <- c(0, Inf)
+
+# Encounter/mortality rates for each eradication method - for now, encounter = mortality, could change this in the future
+mortality_prob_erad_methods <- list()
+mortality_prob_erad_methods$ADS <- 0.95
+mortality_prob_erad_methods$visual <- 0.003 # totally made up, figure this out later
+
+## Inputs
+# coverage = amount of the area that is covered by the eradication method, expressed as percentage from 0 - 1
+# size_affected = the size range of SVL that the method can affect - default is all sizes c(0, Inf)
+# effective_time =  
+
+eradication_fun <- function(day_pop, 
+                            coverage, 
+                            size_affected = c(0, Inf), 
+                            mortality_prob) {
+  # Separating out the proportion of the population that will be affected by eradication (coverage) from the non-encountering population
+  encounter_pop <- slice_sample(day_pop, prop = coverage)
+  no_encounter_pop <- day_pop[!day_pop$ID %in% encounter_pop$ID, ]
+  # If snake is in the size range to be affected, perform Bernoulli draw to determine if it encounters the method (encounter = mortality for now)
+  for(snake in 1:nrow(encounter_pop)) {
+    if(encounter_pop$SVL[snake] > size_affected[1] & encounter_pop$SVL[snake] < size_affected[2]) {
+      if (rbinom(1, 1, prob = mortality_prob) == 1) { 
+        encounter_pop$encounter[snake] <- 1
+      } else {
+        encounter_pop$encounter[snake] <- 0
+      }
+    } else {
+      encounter_pop$encounter[snake] <- 0
+    }
+  }
+  # Separating dead snakes from alive snakes
+  dead_snakes <- encounter_pop[encounter_pop$encounter == 1,]
+  alive_snakes <- encounter_pop[encounter_pop$encounter == 0,]
+  
+  # Recombining surviving snakes with  non-encounter snakes
+  day_pop <- rbind(select(alive_snakes, -c("encounter")), no_encounter_pop)
+  # Return both dead and live snakes (eventually, only return live snakes)
+  return(list(dead_snakes = dead_snakes, alive_snakes = day_pop))
+}
+
+# # Test
+# x <- eradication_fun(init_pop, coverage = 0.25, erad_methods_size_affected[[1]], mortality_prob_erad_methods[[1]])
+```
+
+```{r eradication_test}
+
+quarter_time_step <- 20 # First ~16 quarters are for burn in 
+day_time_step <- 90
+
+# Creating a list of lists to keep track of "observed" snakes - 
+observed_snakes <- list()
+
+# Trying out just ADS at first - 3 treatments over 3 weeks in a year, with total coverage to start
+for(quarter in 1:quarter_time_step) {
+  tic(paste0("Quarter ", quarter))
+  # Setting up empty list to hold any observed snakes in this quarter, if observation occurs
+  observed_snakes[[quarter]] <- list()
+  # Isolate reproducing females for this quarter; after first quarter, check for the females   who reproduced last quarter and skip them this quarter
+  if (quarter == 1) {
+    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
+                            density_prob = r_density_prob)
+  } else {
+    recent_mom_IDs <- repro_females_timeseries[[quarter - 1]]$ID
+    # Update density dependent parameter & r_density
+    current_N <- nrow(quarter_timeseries_pop[[quarter]])
+    DD_param <- DD_param_fun(K, current_N)
+    r_density_prob <- 0.75*DD_param
+    # Choose which females will reproduce
+    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
+                            density_prob = r_density_prob)
+  }
+  # If no reproductive females available, then stop loop and go to next starting value
+  if(nrow(moms) < 1) {
+    print("0 reproducing females")
+    break
+  }
+  # Producing new offspring to join population at the end   of the quarter
+  offspring <- gen_offspring_fun(mom_pop = moms,
+                              time_step = quarter)
+  
+  ## Growth and mortality on a daily scale within the quarter 
+  daily_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter]]
+  # Loop for each day in 90 days
+  for(day in 1:(day_time_step-1)) {
+    #  All snakes are exposed to natural mortality
+    pop <- daily_timeseries_pop[[day]]
+    surviving_pop <- daily_mortality_fun(pop)
+    # Excluding reproductive females to create population who has the potential to grow in this quarter
+    growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
+    # Separating out surviving moms to add back in after growth
+    surviving_moms <- surviving_pop[surviving_pop$ID %in% moms$ID, ]
+    ## Each snake grows (or not) based on it's individual growth quantile
+    # First, updating density dependent growth parameter; currently set to consider the whole population, including reproductive females (could make it just the growing population)
+    # DD_day_param <- DD_param_fun(K, nrow(surviving_pop))
+    # g_density_prob <- 1*DD_day_param
+    # Now, growth occurs (or doesn't)
+    for(snake in 1:nrow(growing_pop)) {
+    growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
+                                   g_density_prob,
+                                   gompertz_coefficients)
+    }
+    # At the end of the day on some days in some quarters, ADS eradication occurs (moms are exempt) - once a week for 3 weeks in 3 consequtive years
+    if(day %in% c(7,14,21) & quarter %in% c(20, 24, 28)){
+      erad_pop <- eradication_fun(growing_pop, coverage = 1, 
+                                     erad_methods_size_affected[[1]],
+                                     mortality_prob_erad_methods[[1]])
+      post_ADS_pop <- erad_pop$alive_snakes
+      # Combine surviving snakes & moms
+      daily_timeseries_pop[[day + 1]] <- rbind(post_ADS_pop, surviving_moms)
+    } else {
+      daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
+    }
+    # At the end of the day on some days in some quarters, visual eradication occurs (moms are exempt) - every night for a week at a time, 3 times in 3 consequtive years (after ADS)
+    if(day %in% c(28:34, 56:62) & quarter %in% c(20, 24, 28)) {
+      erad_pop <- eradication_fun(growing_pop, coverage = 0.2,
+                                     erad_methods_size_affected[[2]],
+                                     mortality_prob_erad_methods[[2]])
+      post_visual_pop <- erad_pop$alive_snakes
+      observed_snakes[[quarter]][[day]] <- erad_pop$dead_snakes
+    # Combine surviving snakes & moms
+      daily_timeseries_pop[[day + 1]] <- rbind(post_visual_pop, surviving_moms)
+    } else {
+      daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
+    }
+  }
+  names(daily_timeseries_pop) <- paste0("day_", c(1:day_time_step))
+
+  # Keeping track of which females reproduced in which quarters (next step will be to use     this to exclude females who've reproduced in the last 2 quarters)
+  repro_females_timeseries[[quarter]] <- moms
+  
+  # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter
+  quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[day_time_step]], offspring)
+  # Updating sexual maturity status after the quarter's worth of growth
+  for(snake in 1:nrow(quarter_timeseries_pop[[quarter + 1]])) {
+    quarter_timeseries_pop[[quarter + 1]]$repro_prob[snake] <- maturity_fun(quarter_timeseries_pop[[quarter + 1]]$SVL[snake])
+  }
+  toc()
+}
+
+names(observed_snakes) <- paste0("quarter_", c(1:quarter_time_step))
+# Function to remove empty lists from observed_snake dataset
+delete.NULLs  <-  function(x.list){   # delele null/empty entries in a list
+    x.list[unlist(lapply(x.list, length) != 0)]
+}
+observed_snakes <- delete.NULLs(observed_snakes)
+for(quarter in 1:3) {
+  names(observed_snakes[[quarter]]) <- paste0("day_", c(1:62))
+  observed_snakes[[quarter]] <- delete.NULLs(observed_snakes[[quarter]])
+}
+observed_melted <- melt(observed_snakes, id.vars = colnames(observed_snakes[[1]][[1]]))
+colnames(observed_melted)[c(7:8)] <- c("Day", "Quarter")
+# Adding size distribution to combined quarters dataframe
+  for(snake in 1:nrow(observed_melted)) {
+    if(observed_melted$SVL[snake] <= 850) {
+      observed_melted$size_category[snake] <- "small"
+    } else if(observed_melted$SVL[snake] > 850 & observed_melted$SVL[snake] <= 950) {
+      observed_melted$size_category[snake] <- "medium"
+    } else if(observed_melted$SVL[snake] > 950 & observed_melted$SVL[snake] <= 1150) {
+      observed_melted$size_category[snake] <- "large"
+    } else {
+      observed_melted$size_category[snake] <- "xlarge"
+    }
+  }
+  # Factoring size category column for graphing
+  observed_melted$size_category <- factor(observed_melted$size_category, 
+                                       levels = c("small", "medium", "large", "xlarge"))
+
+# Plotting number and size distribution of observed snakes in each day and quarter
+plot_observed <- ggplot(observed_melted, aes(x = Day, fill = size_category)) +
+  geom_bar() +
+  facet_wrap("Quarter") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+# Formating quarter results for plotting
+all_quarters <- results_format_fun(quarter_timeseries_pop)
+# Removing the first 10 quarters for burn in
+all_quarters <- all_quarters[all_quarters$Quarter > 10,]
+
+# Plotting the total population in each quarter
+plot_1 <- ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_vline(xintercept = c(20, 24, 28)) 
+
 
 
 
