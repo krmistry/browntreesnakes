@@ -123,7 +123,28 @@ model_validation_fun <- function(quarter_timeseries,
 
 
                           
-                          
+#### Transforming observed dead snakes into summary dataframes (# of snakes) for inputting
+#### into the estimation model
+
+all_observions_fun <- function(all_observed,
+                             erad_days, # if more than one method, use c() in argument
+                             erad_quarters, # if more than one method, use c() in argument
+                             methods) {
+  all_observations <- list()
+  all_quarters <- sort(unique(erad_quarters))
+  all_days <- sort(unique(erad_days))
+  # Count the number of observed snake for each quarter & day that effort occurred
+  for(quarter in all_quarters) {
+    all_observations[[quarter]] <- as.data.frame(matrix(NA, nrow = 0, ncol = 2))
+    colnames(all_observations[[quarter]] <- c("num_snakes", "day")
+    for(day in all_days) {
+      all_observations[[quarter]]$num_snakes <- 
+  
+  
+  names(all_observations) <- paste0("Quarter_", )
+  
+}
+
 
 
 
