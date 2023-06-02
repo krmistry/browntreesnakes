@@ -264,6 +264,9 @@ erad_timing_fun <- function(day,
                                   erad_methods_size_affected[[method_name]],
                                   mortality_prob_erad_methods[[method_name]])
       survivors[[method + 1]] <- erad_pop$alive_snakes
+      effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
+                                                   "day" = day,
+                                                   "quarter" = quarter))
       # Eradication with bodies occurs:
       if(nrow(erad_pop$dead_snakes) > 0) {
         if (method_name %in% erad_methods[c(2:3)]) {
@@ -275,11 +278,7 @@ erad_timing_fun <- function(day,
           unobserved[[method_name]]$day <- day
           unobserved[[method_name]]$quarter <- quarter
         }
-        effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
-                                                     "day" = day,
-                                                     "quarter" = quarter))
       }
-    }
     else {
       survivors[[method + 1]] <- survivors[[method]]
     }
