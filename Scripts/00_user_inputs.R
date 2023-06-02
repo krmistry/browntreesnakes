@@ -131,10 +131,9 @@ erad_methods_size_affected$bait_tube <- c(850, 1100) # Clark et al 2018 for lowe
 # Encounter/mortality rates for each eradication method - for now, encounter = mortality, could change this in the future
 mortality_prob_erad_methods <- list()
 mortality_prob_erad_methods$ADS <- 0.43 # Nafus 2022 - need to think about this further
-mortality_prob_erad_methods$visual <- 0.03 # overall average from Staci's model results
-mortality_prob_erad_methods$trap <- 0.03 # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
-mortality_prob_erad_methods$bait_tube <- 0.03 # placeholder value, same as trap since they are similar methods
-# temporarily changing above to higher mortality, in order to get function working
+mortality_prob_erad_methods$visual <- 0.003 # overall average from Staci's model results
+mortality_prob_erad_methods$trap <- 0.003 # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
+mortality_prob_erad_methods$bait_tube <- 0.003 # placeholder value, same as trap since they are similar methods
 
 # Standard amount of effort per day for each eradication method, in hours (placeholders, figure out what the actual number of hours is later)
 effort_erad_methods <- list()
@@ -143,11 +142,6 @@ effort_erad_methods$visual <- 6
 effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
 effort_erad_methods$bait_tube <- 12 # Same as trap
 
-# Coverage for each method (totally arbitrary, adjust later)
-erad_coverage <- list()
-erad_coverage$ADS <- 0.5
-erad_coverage$visual <- 0.2
-erad_coverage$trap <- 0.2
-erad_coverage$bait_tube <- 0.2
+
 
 
