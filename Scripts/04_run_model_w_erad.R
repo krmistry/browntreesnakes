@@ -15,25 +15,26 @@ source(here("Scripts/02_results_functions.R"))
 
 # Parameters that may be changed or subject to sensitivity analysis or to simulate over
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 10
+area_size <- 55
 
 # Set carrying capacity for this population:
 K <- 119*area_size
 
 
 # # Set up initial population size based on previous model runs (may change this later):
-# last_quarter <- quarter_results$quarter_timeseries[[quarter_time_step]]
-# N <- nrow(last_quarter)
-# 
-# # Initial size distribution, based on previous model runs
-# size_dist <- c("small" = nrow(last_quarter[last_quarter$SVL <= size_class_limits[1, 2],])/N,
-#                 "medium" = nrow(last_quarter[last_quarter$SVL > size_class_limits[2, 1] & last_quarter$SVL <= size_class_limits[2, 2],])/N,
-#                 "large" = nrow(last_quarter[last_quarter$SVL > size_class_limits[3, 1] & last_quarter$SVL <= size_class_limits[3, 2],])/N,
-#                 "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
+qrt_ts_5.11.23 <- readRDS(here("Data/quarter_timeseries_5.11.23_DD.rds"))
+last_quarter <- qrt_ts_5.11.23[[length(qrt_ts_5.11.23)]]
+N <- nrow(last_quarter)
 
-# For initial population roughly based on 10 ha runs in the past:
-N <- 1000
-size_dist <- c(0.57, 0.09, 0.15, 0.19)
+# Initial size distribution, based on previous model runs
+size_dist <- c("small" = nrow(last_quarter[last_quarter$SVL <= size_class_limits[1, 2],])/N,
+                "medium" = nrow(last_quarter[last_quarter$SVL > size_class_limits[2, 1] & last_quarter$SVL <= size_class_limits[2, 2],])/N,
+                "large" = nrow(last_quarter[last_quarter$SVL > size_class_limits[3, 1] & last_quarter$SVL <= size_class_limits[3, 2],])/N,
+                "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
+
+# # For initial population roughly based on 10 ha runs in the past:
+# N <- 1000
+# size_dist <- c(0.57, 0.09, 0.15, 0.19)
 
 
 # Growth probability (p_g)
@@ -48,12 +49,19 @@ erad_quarters <- list()
 erad_quarters$ADS <- c(3, 6)
 erad_quarters$visual <- c(2, 3, 6, 7)
 erad_quarters$trap <- c(3, 6)
-erad_quarters$bait_tube <- c(2, 3, 6)
+erad_quarters$bait_tube <- c(2, 3, 6, 7)
 erad_days <- list()
 erad_days$ADS <- c(7,14,21)
 erad_days$visual <- c(28:34, 56:62)
 erad_days$trap <- c(56:62)
-erad_days$bait_tube <- c(7, 28:34)
+erad_days$bait_tube <- c(28:34)
+
+# Coverage for each method (totally arbitrary, adjust later)
+erad_coverage <- list()
+erad_coverage$ADS <- 0.5
+erad_coverage$visual <- 0.2
+erad_coverage$trap <- 0.2
+erad_coverage$bait_tube <- 0.2
 
 
 # Running model 
@@ -71,7 +79,9 @@ erad_quarter_results <- quarter_operations(initial_N = N,
 erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
                       aes(x = Quarter, fill = size_category)) +
   geom_bar() +
-  geom_hline(yintercept = K)
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 
 # Model validation stats and plots
 erad_model_val <- model_validation_fun(quarter_timeseries = erad_quarter_results$quarter_timeseries,
@@ -100,9 +110,10 @@ for(snake in 1:nrow(all_observed)){
 all_observed$size_category <- factor(all_observed$size_category, 
                                      levels = c("small", "medium", "large", "xlarge"))
 
-observed_plot_1 <- ggplot(all_observed , aes(x = quarter, y = SVL, color = method)) +
-  geom_point() +
-  theme_bw()
+observed_plot_1 <- ggplot(all_observed , aes(x = day, y = SVL, color = method)) +
+  geom_jitter() +
+  theme_bw() +
+  facet_wrap("quarter")
 
 
 unobserved_list <- erad_quarter_results$all_unobserved[unlist(lapply(erad_quarter_results$all_unobserved, length) != 0)]
@@ -115,12 +126,42 @@ for(snake in 1:nrow(all_unobserved)){
 all_unobserved$size_category <- factor(all_unobserved$size_category, 
                                      levels = c("small", "medium", "large", "xlarge"))
 
-unobserved_plot_1 <- ggplot(all_unobserved , aes(x = quarter, y = SVL, color = method)) +
-  geom_point() +
-  theme_bw()
+unobserved_plot_1 <- ggplot(all_unobserved , aes(x = day, y = SVL, color = method)) +
+  geom_jitter() +
+  theme_bw() +
+  facet_wrap("quarter")
 
 
 all_dead_snakes <- bind_rows(all_observed, all_unobserved)
-all_dead_plot_1 <- ggplot(all_dead_snakes , aes(x = quarter, y = SVL, color = method)) +
+all_dead_plot_1 <- ggplot(all_dead_snakes , aes(x = day, y = SVL, color = method)) +
   geom_jitter() +
+  theme_bw() +
+  facet_wrap("quarter")
+
+
+### Plot of each method through time in a representative quarter (3) so we can look at
+### how the method performs
+
+ggplot(all_dead_snakes[all_dead_snakes$quarter == 3,]) +
+  geom_bar(aes(x = day, fill = size_category)) +
+  facet_wrap("method", scales = "free_y") +
+  theme_bw() +
+  labs(title = "Quarter 3")
+
+
+## Proportion of population eradicated in each quarter when eradication occurred
+erad_prop_per_quarter <- vector()
+for(quarter in sort(unique(unlist(erad_quarters)))) {
+  erad_prop_per_quarter[quarter] <- sum(nrow(erad_quarter_results$all_observed[[quarter]]), nrow(erad_quarter_results$all_unobserved[[quarter]]))/nrow(erad_quarter_results$quarter_timeseries[[quarter]])
+}
+erad_prop <- as.data.frame(cbind(sort(unique(unlist(erad_quarters))), 
+                   erad_prop_per_quarter[ !is.na(erad_prop_per_quarter)]))
+colnames(erad_prop) <- c("Quarter", "Erad_proportion")
+
+ggplot(erad_prop) +
+  geom_col(aes(y = Erad_proportion, x = Quarter)) +
   theme_bw()
+
+
+
+
