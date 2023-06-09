@@ -203,7 +203,40 @@ daily_gompertz_growth_fun <- function(snake,
   return(snake)
 }
 
+# Plotting the trajectory of each of the growth trajectories:
+growth_curves <- list()
+# Female growth curves
+growth_curves$Females <- as.data.frame(matrix(NA, nrow = 20*365, ncol = 6))
+colnames(growth_curves$Females) <- c("Day", "25th", "50th", "75th", "90th", "95th")
+growth_curves$Females$Day <- c(1:(20*365))
+growth_curves$Females[1, -1] <- 350
+for(t in 1:length(tau)) {
+  coefs <- gompertz_coefficients[[t]]$F
+  for(day in 2:(20*365)){
+  growth_curves$Females[day, t+1] <- coefs[1] + coefs[2]*log(growth_curves$Females[day-1,t+1]/700) + growth_curves$Females[day-1, t+1]
+  }
+}
+# Male growth curves
+growth_curves$Males <- as.data.frame(matrix(NA, nrow = 20*365, ncol = 6))
+colnames(growth_curves$Males) <- c("Day", "25th", "50th", "75th", "90th", "95th")
+growth_curves$Males$Day <- c(1:(20*365))
+growth_curves$Males[1, -1] <- 350
+for(t in 1:length(tau)) {
+  coefs <- gompertz_coefficients[[t]]$M
+  for(day in 2:(20*365)){
+  growth_curves$Males[day, t+1] <- coefs[1] + coefs[2]*log(growth_curves$Males[day-1,t+1]/700) + growth_curves$Males[day-1, t+1]
+  }
+}
 
+all_growth_curves <- melt(growth_curves, id.vars = "Day")
+colnames(all_growth_curves)[2:4] <- c("Growth_quant", "SVL", "Sex")
+# 
+# ggplot(all_growth_curves, aes(x = Day/365, y = SVL, color = Growth_quant)) +
+#   geom_line() +
+#   facet_grid(rows = vars(Sex)) +
+#   theme_bw() +
+#   labs(x = "Year")
+  
 ```
 
 ### Reproduction
@@ -246,6 +279,10 @@ maturity_fun <- function(snake_SVL) {
   return(maturity)
 }
 
+# Plot distribution of possible snake SVL values
+SVL_list <- c(350:1800)
+maturity_prob_list <- pnorm(SVL_list, maturity_mean, maturity_sd)
+# plot(SVL_list, maturity_prob_list)
 
 #### First reproduction function: extracting females that will reproduce in this quarter
 
@@ -275,9 +312,10 @@ repro_females_fun <- function(start_pop,
 # time_step - the (numeric) quarter the loop is running, used to help randomly assign IDs
 
 gen_offspring_fun <- function(mom_pop,
-                           time_step) {
+                              time_step,
+                              lambda = 2.2) {
   # Version one - using the same value for lambda for all sizes (could separate this out      into size buckets, or maybe even could make it continuous based on Nafus data)
-  total_offspring <- sum(rpois(nrow(mom_pop), 2.3))
+  total_offspring <- sum(rpois(nrow(mom_pop), lambda))
   # Creating empty dataframe to put offspring data into
   offspring <- as.data.frame(matrix(NA, nrow = total_offspring, ncol = 3))
   colnames(offspring) <- c("ID", "SVL", "sex")
@@ -410,11 +448,15 @@ DD_param_fun <- function(carrying_capacity,
   # Calculate PDF value for the current density
   PDf_value <- dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
   # Use maximum value to scale current density's PDF value and produce A parameter
-  A <- (PDf_value/max_prob_value)
-  return(A)
+  p <- (PDf_value/max_prob_value)
+  return(p)
 }
 
 
+# # Plotting example plot of possible values
+# N_list <- c(100:1000)
+# DD_param_list <- DD_param_fun(carrying_capacity = 800, current_density = N_list)
+# plot(N_list, DD_param_list)
 
 ```
 
@@ -504,7 +546,7 @@ results_format_fun <- function(quarter_results) {
 set.seed(18)
 
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 10
+area_size <- 55
 
 # Set carrying capacity for this population:
 K <- 119*area_size
@@ -538,7 +580,7 @@ DD_param <- DD_param_fun(carrying_capacity = K,
 g_density_prob <- 0.75 # 3/23 - 0.75*DD_param meant that no snakes born in the simulation grew past small, so that obviously isnt' going to work trying increasing the constant to 1 to see what that does; nope, 1*DD_param does the same thing
 
 # Density parameter; probability of coin flip; 1 means snake grows, 0 means it doesn't
-r_density_prob <- 0.75*DD_param # to operate stochastically, reproduction can't be 100% guaranteed
+r_density_prob <- DD_param # to operate stochastically, reproduction can't be 100% guaranteed
 
 # Empty lists to put population from each time step in (initially recording everything, eventually I'll only need one, for the quarter time step)
 quarter_timeseries_pop <- list()
@@ -563,7 +605,7 @@ for(quarter in 1:quarter_time_step) {
     # Update density dependent parameter & r_density
     current_N <- nrow(quarter_timeseries_pop[[quarter]])
     DD_param <- DD_param_fun(K, current_N)
-    r_density_prob <- 0.75*DD_param
+    r_density_prob <- DD_param
     # Choose which females will reproduce
     moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
                             density_prob = r_density_prob)
@@ -614,6 +656,8 @@ for(quarter in 1:quarter_time_step) {
   toc()
 }
 toc() # 8 min to run 5 years with initial N = 1,250 and K = 4,165 (max pop was 2,602)
+# 20 years for 55 acres took about 3 hours to run on 5/8/23
+
 
 # Melting daily timeseries (only the 90 days in the final quarter) into a single dataframe
 all_days <- melt(daily_timeseries_pop, id.vars = c("ID", "sex", "repro_prob", "growth_quant"))
@@ -626,17 +670,18 @@ all_quarters <- results_format_fun(quarter_timeseries_pop)
 
 # Plotting the total population in each quarter
 plot_1 <- ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
-  geom_bar()
+  geom_bar() +
+  geom_hline(yintercept = K)
 
 # # Isolating and graphing one snake
 # snake <- all_days[all_days$ID == all_days$ID[22],]
 # ggplot(snake, aes(x = time_step, y = SVL)) +
-#   geom_point() +
-#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#    geom_point() +
+#    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 # Saving versions of the timeseries if needed
-saveRDS(quarter_timeseries_pop, file = here("Data/quarter_timeseries_3.23.23_DD.rds"))
-saveRDS(daily_timeseries_pop, file = here("Data/daily_timeseries_3.23.23_DD.rds"))
+saveRDS(quarter_timeseries_pop, file = here("Data/quarter_timeseries_5.11.23_DD.rds"))
+saveRDS(daily_timeseries_pop, file = here("Data/daily_timeseries_5.11.23_DD.rds"))
 
 ```
 
@@ -661,11 +706,11 @@ model_validation$mom_rate <- mom_rate
 # With DD & gompertz growth, area = 5 ha; mean = 6%, min = 1.7%, max = 21%
 
 ## How many offspring were added each quarter?
-offspring_per_quarter <- vector()
+pop_growth_per_quarter <- vector()
 for(quarter in 2:length(quarter_timeseries_pop)) {
-  offspring_per_quarter[quarter - 1] <- nrow(quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% quarter_timeseries_pop[[quarter - 1]]$ID,])
+  pop_growth_per_quarter[quarter - 1] <- nrow(quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% quarter_timeseries_pop[[quarter - 1]]$ID,])/nrow(quarter_timeseries_pop[[quarter]])
 }
-model_validation$offspring <- offspring_per_quarter
+model_validation$pop_growth_rate <- pop_growth_per_quarter
 
 # summary(offspring_per_quarter) # mean = 72, min = 36 and max = 127
 # For 3/17 enormous run: mean = 1,337, median = 541, min = 33, max = 6,662
@@ -713,7 +758,7 @@ colnames(age_by_size) <- c("ID", "num_Q_small", "num_Q_medium", "num_Q_large",
 for(snake in 1:length(unique(new_all_Qs$ID))){
   snake_data <- new_all_Qs[new_all_Qs$ID == unique(new_all_Qs$ID)[snake], ] 
   age_by_size[snake, 1] <- snake_data$ID[1]
-  for(size in 1:length(size)) {
+  for(size in 1:length(sizes)) {
     age_by_size[snake, (size + 1)] <- nrow(snake_data[snake_data$size_category == sizes[size],])
   }
 }
@@ -748,15 +793,17 @@ model_validation$max_size <- max_size
 
 ## Select snakes that survived for more than 40 quarters and graph their growth trajectories
 LL_snakes <- all_quarters[0,]
+x <- vector()
 for(snake in 1:length(unique(all_quarters$ID))) {
   snake_ts <- all_quarters[all_quarters$ID == unique(all_quarters$ID)[snake], ]
   if(nrow(snake_ts) >= 40) {
   LL_snakes <- rbind(LL_snakes, snake_ts)
   }
+  x[snake] <- nrow(LL_snakes)
 }
 
-# How many snakes lived more than 10 years
-model_validation$LL_snakes$proportion <- length(unique(LL_snakes$ID))/length(unique(new_all_Qs$ID)) # 222
+# How many snakes lived more than 10 years (including snakes initialized in year 1)
+model_validation$LL_snakes$proportion <- length(unique(LL_snakes$ID))/length(unique(all_quarters$ID)) # 222
 # Sample a subset to graph if there are more than 50
 plot_snake_IDs <- sample(unique(LL_snakes$ID), 25)
 plot_snakes <- all_quarters[all_quarters$ID %in% plot_snake_IDs,]
@@ -769,7 +816,7 @@ model_validation$LL_snakes$LL_plot <- LL_plot
 
 # Summarizing the above model validation info
 mv_table <- as.data.frame(matrix(NA, nrow = 3, ncol = 5))
-colnames(mv_table) <- c("mom_rate", "num_offspring", "mortality_rate", "lifespan", "max_SVL")
+colnames(mv_table) <- c("mom_rate_per_quarter", "offspring_per_quarter", "mortality_rate_per_quarter", "lifespan_in_quarters", "max_SVL")
 rownames(mv_table) <- c("min", "mean", "max")
 mv_table$mom_rate_per_quarter <- summary(model_validation$mom_rate)[c(1,4,6)]
 mv_table$offspring_per_quarter <- summary(model_validation$offspring)[c(1,4,6)]
@@ -777,7 +824,8 @@ mv_table$mortality_rate_per_quarter <- summary(model_validation$mortality_rate)[
 mv_table$lifespan_in_quarters <- summary(model_validation$lifespan_quart)[c(1,4,6)]
 mv_table$max_SVL <- summary(model_validation$max_size)[c(1,4,6)]
 
-mv_table_2 <- list()
+
+
 
 
 ```
@@ -974,7 +1022,7 @@ The primary eradicaton methods are:
 
         -   For parameter in Bernoulli: encounter probability is based on size (0 outside the size affected range, and the same probability for all others to start with)
 
-        -   Mortality if encountered is another Bernoulli:
+        -   Mortality if encountered is another Bernoulli, if its separated from encounter (currently, encounter = mortality)
 
         -   In the day loop, have 3 applications 7 days apart in 1 quarter per year for final 2 years of time series to start with (to give the population a burn in period - eventually this may be unnecessary, and I could just run for the period of time that the applications are actively occurring, hopefully)
 
@@ -1006,21 +1054,58 @@ The primary eradicaton methods are:
 
     -   Effective time:
 
-#### Effort 
+#### Effort
 
-All of the eradication methods needs to include a metric for effort - I think it should all be in the same units, probably. Area covered is one type of effort, which I'm already using, but is that good enough?
+All of the eradication methods needs to include a metric for effort - I think it should all be in the same units, probably. Area covered is one type of effort, which I'm already using, but is that good enough? I think it should probably include how many hours the eradication method is available. So maybe something like $h_j*c_j$ with $h_j$ = number of hours per day and for eradication method $j$ and $c_j$ = proportion of area covered by eradication method $j$.
+
+-   ADS: $h_1 = 24$ hours (or 12, if we just count when the snacks are active) over the coverage
+
+-   Visual: $h_2 = 4$ hours (or whatever the standard number of hours to search
+
+-   Trap: $h_3 = 24$ hours (or, again, 12)
+
+Instead of using the actual number of hours, I could instead standardize this to be the proportion of the day (24/24, 4/24, or if only counting night hours then 12/12 and 4/12), which would standardize this. It would also mean that the product ($h*c$) would be between 0 and 1, like what Jess did.
+
+```{r eradication_encounter_rates}
+library(jagsUI)
+load(here("NWFNTRAPALL_SCRpstar.Rdata"))
+load(here("NWFNVISALL_SCRpstar.Rdata"))
+# Point estimates (mean) from posterior distributions for encounter rates
+out$mean$p0 
+# Trap encounter rates by size: 0.001630739 0.002573346 0.004453922 0.004016056
+# overall mean: 0.003168516
+# Visual encounter rates by size: 0.003032118 0.003409591 0.003534641 0.002989624
+# overall mean: 0.003241493
+```
 
 ```{r eradication_methods_fun}
 
+# Names of the eradication methods possible:
+erad_methods <- c("ADS", 
+                  "visual",
+                  "trap",
+                  "bait_tube")
+
 # Size limits for snakes affected for each eradication method
 erad_methods_size_affected <- list()
-erad_methods_size_affected$ADS <- c(850, 1200)
-erad_methods_size_affected$visual <- c(0, Inf)
+erad_methods_size_affected$ADS <- c(850, 1100) # Clark et al 2018 for lower limit
+erad_methods_size_affected$visual <- c(0, Inf) # Clark et al 2018, Rodda et al 2007
+erad_methods_size_affected$trap <- c(800, 1100) # Clark et al 2018; some captures of 700-900 mm SVL snakes, but only partially effective
+erad_methods_size_affected$bait_tube <- c(850, 1100) # Clark et al 2018 for lower limit
 
 # Encounter/mortality rates for each eradication method - for now, encounter = mortality, could change this in the future
 mortality_prob_erad_methods <- list()
-mortality_prob_erad_methods$ADS <- 0.95
-mortality_prob_erad_methods$visual <- 0.003 # totally made up, figure this out later
+mortality_prob_erad_methods$ADS <- 0.43 # Nafus 2022 - need to think about this further
+mortality_prob_erad_methods$visual <- 0.003 # overall average from Staci's model results
+mortality_prob_erad_methods$trap <- 0.003 # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
+mortality_prob_erad_methods$bait_tube <- 0.003 # placeholder value, same as trap since they are similar methods
+
+# Standard amount of effort per day for each eradication method, in hours (placeholders, figure out what the actual number of hours is later)
+effort_erad_methods <- list()
+effort_erad_methods$ADS <- 4
+effort_erad_methods$visual <- 6
+effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
+effort_erad_methods$bait_tube <- 12 # Same as trap
 
 ## Inputs
 # coverage = amount of the area that is covered by the eradication method, expressed as percentage from 0 - 1
@@ -1062,29 +1147,59 @@ eradication_fun <- function(day_pop,
 
 ```{r eradication_test}
 
-quarter_time_step <- 20 # First ~16 quarters are for burn in 
-day_time_step <- 90
+erad_quarter_time_step <- 8 # First ~16 quarters are for burn in 
+day_time_step <- 91
 
-# Creating a list of lists to keep track of "observed" snakes - 
+# Quarters where eradication methods are used, and which days in that quarter:
+erad_quarters <- list()
+erad_quarters$ADS <- c(3, 6)
+erad_quarters$visual <- c(2, 3, 6, 7)
+erad_days <- list()
+erad_days$ADS <- c(7,14,21)
+erad_days$visual <- c(28:34, 56:62)
+
+# Calculating the effort that will be expended (sum in each quarter):
+effort_record <- list()
+for(method in erad_methods){
+  effort_record[[method]] <- list()
+}
+
+# Creating a list of lists to keep track of "observed" snakes from visual surveys and "unobserved" but still dead snakes from ADS - 
 observed_snakes <- list()
+unobserved_dead_snakes <- list()
+
+# Using last step from the last generating model run as the starting point
+quarter_timeseries_pop <- readRDS(file = here("Data/quarter_timeseries_5.11.23_DD.rds"))
+erad_quarter_timeseries_pop <- list()
+erad_quarter_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter_time_step]]
+# Creating new list for reproducing females and daily population
+erad_repro_females <- list()
+erad_daily_timeseries_pop <- list()
+
+# Setting DD parameter with initial population
+r_density_prob <- DD_param_fun(carrying_capacity = K,
+                               current_density = nrow(erad_quarter_timeseries_pop[[1]]))
 
 # Trying out just ADS at first - 3 treatments over 3 weeks in a year, with total coverage to start
-for(quarter in 1:quarter_time_step) {
+for(quarter in 1:erad_quarter_time_step) {
   tic(paste0("Quarter ", quarter))
-  # Setting up empty list to hold any observed snakes in this quarter, if observation occurs
+  # Setting up empty list to hold any observed and unobserved dead snakes in this quarter, if observation occurs, as well as the effort expended for each method
   observed_snakes[[quarter]] <- list()
+  unobserved_dead_snakes[[quarter]] <- list()
+  for(method in erad_methods){
+    effort_record[[method]][[quarter]] <- list()
+  }
   # Isolate reproducing females for this quarter; after first quarter, check for the females   who reproduced last quarter and skip them this quarter
   if (quarter == 1) {
-    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
+    moms <- repro_females_fun(start_pop = erad_quarter_timeseries_pop[[quarter]],
                             density_prob = r_density_prob)
   } else {
-    recent_mom_IDs <- repro_females_timeseries[[quarter - 1]]$ID
+    recent_mom_IDs <- erad_repro_females[[quarter - 1]]$ID
     # Update density dependent parameter & r_density
-    current_N <- nrow(quarter_timeseries_pop[[quarter]])
-    DD_param <- DD_param_fun(K, current_N)
-    r_density_prob <- 0.75*DD_param
+    current_N <- nrow(erad_quarter_timeseries_pop[[quarter]])
+    r_density_prob <- DD_param_fun(K, current_N)
     # Choose which females will reproduce
-    moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]][!quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
+    moms <- repro_females_fun(start_pop = erad_quarter_timeseries_pop[[quarter]][!erad_quarter_timeseries_pop[[quarter]]$ID %in% recent_mom_IDs,],
                             density_prob = r_density_prob)
   }
   # If no reproductive females available, then stop loop and go to next starting value
@@ -1097,20 +1212,17 @@ for(quarter in 1:quarter_time_step) {
                               time_step = quarter)
   
   ## Growth and mortality on a daily scale within the quarter 
-  daily_timeseries_pop[[1]] <- quarter_timeseries_pop[[quarter]]
+  erad_daily_timeseries_pop[[1]] <- erad_quarter_timeseries_pop[[quarter]]
   # Loop for each day in 90 days
   for(day in 1:(day_time_step-1)) {
     #  All snakes are exposed to natural mortality
-    pop <- daily_timeseries_pop[[day]]
+    pop <- erad_daily_timeseries_pop[[day]]
     surviving_pop <- daily_mortality_fun(pop)
     # Excluding reproductive females to create population who has the potential to grow in this quarter
     growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
     # Separating out surviving moms to add back in after growth
     surviving_moms <- surviving_pop[surviving_pop$ID %in% moms$ID, ]
     ## Each snake grows (or not) based on it's individual growth quantile
-    # First, updating density dependent growth parameter; currently set to consider the whole population, including reproductive females (could make it just the growing population)
-    # DD_day_param <- DD_param_fun(K, nrow(surviving_pop))
-    # g_density_prob <- 1*DD_day_param
     # Now, growth occurs (or doesn't)
     for(snake in 1:nrow(growing_pop)) {
     growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
@@ -1118,88 +1230,263 @@ for(quarter in 1:quarter_time_step) {
                                    gompertz_coefficients)
     }
     # At the end of the day on some days in some quarters, ADS eradication occurs (moms are exempt) - once a week for 3 weeks in 3 consequtive years
-    if(day %in% c(7,14,21) & quarter %in% c(20, 24, 28)){
+    if(quarter %in% erad_quarters$ADS & day %in% erad_days$ADS){
       erad_pop <- eradication_fun(growing_pop, coverage = 1, 
                                      erad_methods_size_affected[[1]],
                                      mortality_prob_erad_methods[[1]])
       post_ADS_pop <- erad_pop$alive_snakes
+      unobserved_dead_snakes[[quarter]][[day]] <- erad_pop$dead_snakes
+      effort_record$ADS[[quarter]][[day]] <- effort_erad_methods$ADS
       # Combine surviving snakes & moms
-      daily_timeseries_pop[[day + 1]] <- rbind(post_ADS_pop, surviving_moms)
-    } else {
-      daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
-    }
-    # At the end of the day on some days in some quarters, visual eradication occurs (moms are exempt) - every night for a week at a time, 3 times in 3 consequtive years (after ADS)
-    if(day %in% c(28:34, 56:62) & quarter %in% c(20, 24, 28)) {
+      erad_daily_timeseries_pop[[day + 1]] <- rbind(post_ADS_pop, surviving_moms)
+    } else if(quarter %in% erad_quarters$visual & day %in% erad_days$visual) {
       erad_pop <- eradication_fun(growing_pop, coverage = 0.2,
                                      erad_methods_size_affected[[2]],
                                      mortality_prob_erad_methods[[2]])
       post_visual_pop <- erad_pop$alive_snakes
       observed_snakes[[quarter]][[day]] <- erad_pop$dead_snakes
+      effort_record$visual[[quarter]][[day]] <- effort_erad_methods$visual
     # Combine surviving snakes & moms
-      daily_timeseries_pop[[day + 1]] <- rbind(post_visual_pop, surviving_moms)
-    } else {
-      daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
+      erad_daily_timeseries_pop[[day + 1]] <- rbind(post_visual_pop, surviving_moms)
+    } 
+    else {
+      erad_daily_timeseries_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
     }
   }
-  names(daily_timeseries_pop) <- paste0("day_", c(1:day_time_step))
+  names(erad_daily_timeseries_pop) <- paste0("day_", c(1:day_time_step))
 
   # Keeping track of which females reproduced in which quarters (next step will be to use     this to exclude females who've reproduced in the last 2 quarters)
-  repro_females_timeseries[[quarter]] <- moms
+  erad_repro_females[[quarter]] <- moms
   
   # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter
-  quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[day_time_step]], offspring)
+  erad_quarter_timeseries_pop[[quarter + 1]] <- rbind(erad_daily_timeseries_pop[[day_time_step]], offspring)
   # Updating sexual maturity status after the quarter's worth of growth
-  for(snake in 1:nrow(quarter_timeseries_pop[[quarter + 1]])) {
-    quarter_timeseries_pop[[quarter + 1]]$repro_prob[snake] <- maturity_fun(quarter_timeseries_pop[[quarter + 1]]$SVL[snake])
+  for(snake in 1:nrow(erad_quarter_timeseries_pop[[quarter + 1]])) {
+    erad_quarter_timeseries_pop[[quarter + 1]]$repro_prob[snake] <- maturity_fun(erad_quarter_timeseries_pop[[quarter + 1]]$SVL[snake])
   }
   toc()
 }
 
-names(observed_snakes) <- paste0("quarter_", c(1:quarter_time_step))
+names(observed_snakes) <- paste0("quarter_", c(1:erad_quarter_time_step))
+names(unobserved_dead_snakes) <- paste0("quarter_", c(1:erad_quarter_time_step))
+for(method in erad_methods) {
+  names(effort_record[[method]]) <- paste0("quarter_", c(1:erad_quarter_time_step))
+}
+
 # Function to remove empty lists from observed_snake dataset
 delete.NULLs  <-  function(x.list){   # delele null/empty entries in a list
     x.list[unlist(lapply(x.list, length) != 0)]
 }
-observed_snakes <- delete.NULLs(observed_snakes)
-for(quarter in 1:3) {
-  names(observed_snakes[[quarter]]) <- paste0("day_", c(1:62))
-  observed_snakes[[quarter]] <- delete.NULLs(observed_snakes[[quarter]])
-}
-observed_melted <- melt(observed_snakes, id.vars = colnames(observed_snakes[[1]][[1]]))
-colnames(observed_melted)[c(7:8)] <- c("Day", "Quarter")
-# Adding size distribution to combined quarters dataframe
-  for(snake in 1:nrow(observed_melted)) {
-    if(observed_melted$SVL[snake] <= 850) {
-      observed_melted$size_category[snake] <- "small"
-    } else if(observed_melted$SVL[snake] > 850 & observed_melted$SVL[snake] <= 950) {
-      observed_melted$size_category[snake] <- "medium"
-    } else if(observed_melted$SVL[snake] > 950 & observed_melted$SVL[snake] <= 1150) {
-      observed_melted$size_category[snake] <- "large"
+
+## Function to format the observed and unobserved lists into usable dataframes
+dead_snakes_fun <- function(dead_snakes_list,
+                            max_day) {
+  dead_snakes <- delete.NULLs(dead_snakes_list)
+  for(quarter in 1:length(dead_snakes)) {
+    names(dead_snakes[[quarter]]) <- paste0("day_", 1:max_day)
+    dead_snakes[[quarter]] <- delete.NULLs(dead_snakes[[quarter]])
+  }
+  dead_snakes_melted <- melt(dead_snakes, id.vars = colnames(dead_snakes[[1]][[1]]))
+  colnames(dead_snakes_melted)[c(7:8)] <- c("Day", "Quarter")
+  # Adding size distribution to combined quarters dataframe
+  for(snake in 1:nrow(dead_snakes_melted)) {
+    if(dead_snakes_melted$SVL[snake] <= 850) {
+      dead_snakes_melted$size_category[snake] <- "small"
+    } else if(dead_snakes_melted$SVL[snake] > 850 & dead_snakes_melted$SVL[snake] <= 950) {
+      dead_snakes_melted$size_category[snake] <- "medium"
+    } else if(dead_snakes_melted$SVL[snake] > 950 & dead_snakes_melted$SVL[snake] <= 1150) {
+      dead_snakes_melted$size_category[snake] <- "large"
     } else {
-      observed_melted$size_category[snake] <- "xlarge"
+      dead_snakes_melted$size_category[snake] <- "xlarge"
     }
   }
   # Factoring size category column for graphing
-  observed_melted$size_category <- factor(observed_melted$size_category, 
+  dead_snakes_melted$size_category <- factor(dead_snakes_melted$size_category, 
                                        levels = c("small", "medium", "large", "xlarge"))
+  return(dead_snakes_melted)
+}
+
+# Reformatting observed and unobserved dead snakes
+observed_snakes_melted <- dead_snakes_fun(observed_snakes, max(erad_days$visual))
+unobserved_snakes_melted <- dead_snakes_fun(unobserved_dead_snakes, max(erad_days$ADS))
+
+# Melting effort into a single dataframe for plotting, after naming the days
+for(method in erad_methods) {
+  effort_record[[method]] <- delete.NULLs(effort_record[[method]])
+  for(quarter in 1:length(effort_record[[method]])){
+    names(effort_record[[method]][[quarter]]) <- paste0("day_", 1:max(erad_days[[method]]))
+    effort_record[[method]][[quarter]] <- delete.NULLs(effort_record[[method]][[quarter]])
+  }
+}
+all_effort <- melt(effort_record)
+colnames(all_effort) <- c("hours", "day", "quarter", "method")
+
+# Version of the above summarized by quarter (not sure best way to summarize effort yet)
+all_effort_quarters <- list()
+for(method in erad_methods) {
+  all_effort_quarters[[method]] <- as.data.frame(matrix(NA, nrow = erad_quarter_time_step, ncol = 2))
+  colnames(all_effort_quarters[[method]]) <- c("Quarter", "Total_hours")
+  all_effort_quarters[[method]]$Quarter <- 1:erad_quarter_time_step
+  for(quarter in 1:erad_quarter_time_step) {
+    if(quarter %in% erad_quarters[[method]]) {
+      all_effort_quarters[[method]]$Total_hours[quarter] <- sum(unlist(effort_record[[method]][[paste0("quarter_", quarter)]]))
+    } else { 
+      all_effort_quarters[[method]]$Total_hours[quarter] <- 0
+    }
+  }
+}
+# Melted version
+all_effort_quarters_melt <- melt(all_effort_quarters, id.vars = c("Quarter", "Total_hours"))
+colnames(all_effort_quarters_melt)[3] <- "method"
+
 
 # Plotting number and size distribution of observed snakes in each day and quarter
-plot_observed <- ggplot(observed_melted, aes(x = Day, fill = size_category)) +
+plot_observed <- ggplot(observed_snakes_melted, aes(x = Day, fill = size_category)) +
   geom_bar() +
   facet_wrap("Quarter") +
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  theme_bw()
+# Plotting number and size distribution of unobserved dead snakes in each day and quarter
+plot_unobserved <- ggplot(unobserved_snakes_melted, aes(x = Day, fill = size_category)) +
+  geom_bar() +
+  facet_wrap("Quarter") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  theme_bw()
+
+# Plotting eradication effort by quarter
+plot_effort <- ggplot(all_effort_quarters_melt, 
+                      aes(x = Quarter, y = Total_hours, fill = method)) + 
+  geom_bar(stat="identity", position=position_dodge())
+
 
 # Formating quarter results for plotting
-all_quarters <- results_format_fun(quarter_timeseries_pop)
-# Removing the first 10 quarters for burn in
-all_quarters <- all_quarters[all_quarters$Quarter > 10,]
+all_erad_quarters <- results_format_fun(erad_quarter_timeseries_pop)
 
 # Plotting the total population in each quarter
-plot_1 <- ggplot(all_quarters, aes(x = Quarter, fill = size_category)) +
+plot_1 <- ggplot(all_erad_quarters, aes(x = Quarter, fill = size_category)) +
   geom_bar() +
-  geom_vline(xintercept = c(20, 24, 28)) 
+  # geom_vline(xintercept = ADS_quarters, color = "darkorange") +
+  # geom_vline(xintercept = vis_quarters + 0.1, color = "darkblue") +
+  theme_bw() +
+  scale_x_continuous(breaks = c(1:9), labels = c(1:9))
 
 
 
 
+
+```
+
+### Eradication mortality at high SVL for toxic baits
+
+#### Option 1: Exponential decay
+
+General exponential decay function, with 1400 being the point at which mortality/encounter probability begins to decay (based on Shane's info, to be fine tuned later)
+
+$$
+y = b^{(SVL-1400)}
+$$
+
+$b$ is the growth factor, and needs to be between 0 and 1. I'll have to experiment with this to pick a value (or a range of values).
+
+I initially tried a very wide range of b values (0.01 to 0.99 in increments of 0.01, so 100 values), and based on this, I narrowed the range to values above 0.9, so that there is at least some probability above 1500 mm SVL (below b = 0.9, there is basically no probability of mortality above 1450 mm SVL, which doesn't match what Shane said).
+
+```{r mortality_decay-exponential}
+
+## Decreasing mortality/encounter probability for toxic bait methods (ADS & bait tubes)
+
+# Trying out different b values for exponential decay
+b_options <- seq(0.90, 0.999, 0.005)
+b_results <- list()
+for(b in 1:length(b_options)) {
+  x <- seq(1401, max(unlist(gompertz_asymptotes)), 5)
+  y <- b_options[b]^(x-1400)
+  b_results[[b]] <- as.data.frame(cbind(x,y))
+  colnames(b_results[[b]]) <- c("SVL", "mortality_prob")
+}
+names(b_results) <- b_options
+b_results_melt <- melt(b_results, id.vars = c(colnames(b_results[[1]])))
+colnames(b_results_melt)[3] <- "b_option"
+b_results_melt$b_option <- factor(b_results_melt$b_option, levels = b_options)
+
+b_options_plot <- ggplot(b_results_melt) +
+  geom_line(aes(x = SVL, y = mortality_prob, color = b_option)) +
+  theme_bw()
+
+
+# If 1600 is when 50% mortality occurs, then this would be the decay function:
+x <- seq(1401, max(unlist(gompertz_asymptotes)), 5)
+y <- (0.5^(1/200))^(x-1400)
+b_0.9965 <- as.data.frame(cbind(x,y))
+colnames(b_0.9965) <- c("SVL", "mortality_prob")
+
+ggplot(b_0.9965) +
+  geom_line(aes(x = SVL, y = mortality_prob))
+```
+
+#### Option 2: Gaussian decay
+
+If we believe that decay has a longer plateau then a sharp decline, then I could use a Gaussian decay function, with the format:
+
+$$
+y = e^{\frac{-x^2}{d}}
+$$
+
+$d$ is a scale parameter, which dictates how far out the tail stretches (and hence how quickly the sharp decay occurs).
+
+I initially tried seq(1500, 2500, 100) for the d values, and this produced very low probabilities above 1500 for any of them, with very fast decay between 1400 and 1450, so I greatly increased the range of d.
+
+For now, going with $d = 2100$, which puts the 50% mortality rate at about 1525 mm SVL.
+
+```{r mortality_decay-gaussian}
+
+# Trying out different b values for exponential decay
+d_options <- seq(1000, 50000, 5000)
+d_results <- list()
+for(d in 1:length(d_options)) {
+  x <- seq(1401, max(unlist(gompertz_asymptotes)), 5)
+  y <- exp(-((x-1400)^2/d_options[d]))
+  d_results[[d]] <- as.data.frame(cbind(x,y))
+  colnames(d_results[[d]]) <- c("SVL", "mortality_prob")
+}
+names(d_results) <- d_options
+d_results_melt <- melt(d_results, id.vars = c(colnames(d_results[[1]])))
+colnames(d_results_melt)[3] <- "d_option"
+d_results_melt$d_option <- factor(d_results_melt$d_option, levels = d_options)
+
+d_options_plot <- ggplot(d_results_melt) +
+  geom_line(aes(x = SVL, y = mortality_prob, color = d_option)) +
+  theme_bw()
+
+
+# Combining both types of decay functions, just to more directly compare them
+d_results_melt$method <- "gauss"
+b_results_melt$method <- "exp"
+d_results_melt$d_option <- paste0("d_", d_results_melt$d_option)
+b_results_melt$b_option <- paste0("b_", b_results_melt$b_option)
+colnames(d_results_melt)[3] <- "scale_par"
+colnames(b_results_melt)[3] <- "scale_par"
+all_results <- rbind(d_results_melt, b_results_melt)
+
+ggplot(all_results, aes(x = SVL, y = mortality_prob, color = method, group = scale_par)) +
+  geom_path() +
+  theme_bw() 
+  
+
+```
+
+```{r size_based_toxic_bait_mortality}
+
+# Plotting entire surface of mortality probability by SVL size, using the diet transition and
+# decay functions, as they currently are (scale parameters and even form of decay function  may change in the future)
+
+SVL <- seq(350, 1850, 5)
+mortality <- vector()
+for(snake in 1:length(SVL)) {
+  mortality[snake] <- mortality_prob[[1]][1]*diet_trans_fun(SVL[snake])*mortality_decay_fun(SVL[snake])
+}
+
+ggplot(as.data.frame(cbind(SVL, mortality))) +
+  geom_line(aes(x = SVL, y = mortality)) +
+  geom_hline(yintercept = mortality_prob[[1]][1], color = "blue") +
+  theme_bw()
 ```
