@@ -3,11 +3,12 @@
 library(jagsUI)
 
 ####################### IBM objects #######################################
+size_class_names <- c("small", "medium", "large", "xlarge")
 
 # Size limits of the 4 size classes
 size_class_limits <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
 colnames(size_class_limits) <- c("lower", "upper")
-rownames(size_class_limits) <- c("small", "medium", "large", "xlarge")
+rownames(size_class_limits) <- size_class_names
 size_class_limits$lower <- c(250, 850, 950, 1150)
 size_class_limits$upper <- c(850, 950, 1150, 1500) # upper limit of largest size only used 
 # for initializing sizes in first quarter population, there isn't an upper limit on the 
@@ -130,10 +131,18 @@ erad_methods_size_affected$bait_tube <- c(850, 1100) # Clark et al 2018 for lowe
 
 # Encounter/mortality rates for each eradication method - for now, encounter = mortality, could change this in the future
 mortality_prob_erad_methods <- list()
-mortality_prob_erad_methods$ADS <- 0.43 # Nafus 2022 - need to think about this further
-mortality_prob_erad_methods$visual <- 0.003 # overall average from Staci's model results
-mortality_prob_erad_methods$trap <- 0.003 # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
-mortality_prob_erad_methods$bait_tube <- 0.003 # placeholder value, same as trap since they are similar methods
+mortality_prob_erad_methods$ADS <- rep(0.43, 4) # Nafus 2022 - need to think about this further
+mortality_prob_erad_methods$visual <- visual_rates_all # overall average from Staci's model results
+mortality_prob_erad_methods$trap <- trap_rates_all # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
+mortality_prob_erad_methods$bait_tube <- rep(mean_trap_rate, 4) # placeholder value, same as trap since they are similar methods
+for(method in 1:length(mortality_prob_erad_methods)) {
+  names(mortality_prob_erad_methods[[method]]) <- size_class_names
+}
+
+# Artificially increasing detection rates while I'm working on making the estimation model work
+mortality_prob_erad_methods[[2]] <- mortality_prob_erad_methods[[2]]*10
+mortality_prob_erad_methods[[3]] <- mortality_prob_erad_methods[[3]]*10
+mortality_prob_erad_methods[[4]] <- mortality_prob_erad_methods[[4]]*10
 
 # Standard amount of effort per day for each eradication method, in hours (placeholders, figure out what the actual number of hours is later)
 effort_erad_methods <- list()
