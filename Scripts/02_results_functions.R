@@ -4,7 +4,7 @@
 
 # Adding size distribution to combined quarters dataframe
 size_class_fun <- function(snake_SVL,
-                           size_limits){
+                           size_limits = size_class_limits){
   if(snake_SVL <= size_limits[1,2]) {
     return("small")
   } else if(snake_SVL > size_limits[2,1] & snake_SVL <= size_limits[2,2]) {
@@ -147,7 +147,30 @@ all_observions_fun <- function(all_observed,
 
 
 
+## Create vector with the difference between all eradication effort days 
 
 
 
+effort_days <- list()
+for(method in 1:length(erad_methods)) {
+  effort_days[[method]] <- list()
+  for(quarter in 1:length(erad_quarters[[method]])) {
+    effort_days[[method]][[quarter]] <- vector()
+    for(day in 1:length(erad_days[[method]])) {
+      effort_days[[method]][[quarter]][day] <- (erad_quarters[[method]][quarter]*91)-91 + erad_days[[method]][day]
+    }
+  }
+  names(effort_days[[method]]) <- paste0("quarter_", erad_quarters[[method]])
+}
+names(effort_days) <- erad_methods
+all_effort_days <- sort(unique(unlist(effort_days)))
+# Difference between last visual survey day in quarter 2 week 5 to first visual survey day 
+# in week 9
+effort_days$visual$quarter_2[14] - effort_days$visual$quarter_2[7]
+effort_days$visual$quarter_7[7] - effort_days$visual$quarter_2[14]
+effort_days$visual$quarter_7[14] - effort_days$visual$quarter_7[7]
 
+all_days_btwn <- vector()
+for(t in 1:(length(all_effort_days)-1)) {
+  all_days_btwn[t] <- all_effort_days[t+1]-all_effort_days[t]
+}
