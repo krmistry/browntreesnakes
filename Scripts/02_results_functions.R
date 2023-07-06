@@ -123,54 +123,82 @@ model_validation_fun <- function(quarter_timeseries,
 
 
                           
-#### Transforming observed dead snakes into summary dataframes (# of snakes) for inputting
-#### into the estimation model
+### Transforming observed dead snakes into summary dataframes (# of snakes) for inputting
+### into the estimation model
 
-all_observions_fun <- function(all_observed,
-                             erad_days, # if more than one method, use c() in argument
-                             erad_quarters, # if more than one method, use c() in argument
-                             methods) {
-  all_observations <- list()
-  all_quarters <- sort(unique(erad_quarters))
-  all_days <- sort(unique(erad_days))
+all_observations_fun <- function(erad_results_ts,
+                                 #erad_days = erad_days[c(2:3)], # if more than one method, use c() in argument
+                                 #erad_quarters = erad_quarters[c(2:3)], # if more than one method, use c() in argument
+                                 methods) {
+  # Create vectors with quarters and days when eradication occurred
+  all_quarters <- sort(unique(unlist(erad_quarters[methods])))
+  all_days <- sort(unique(unlist(erad_days[methods])))
+  # Combine all observed (captured) snakes into one dataframe
+  observed_list <- erad_results_ts$all_observed[unlist(lapply(erad_results_ts$all_observed, length) != 0)]
+  all_observed <- bind_rows(observed_list)
+  for(snake in 1:nrow(all_observed)){
+    all_observed$size_category[snake] <- size_class_fun(all_observed$SVL[snake], 
+                                                        size_class_limits)
+  }
+  # Creating empty array to summarize results (for input into jags model)
+  observations_array <- array(0, dim = c(2,4, length(all_days), length(all_quarters)))
+  # Effort
+  effort_list <- erad_results_ts$all_effort[unlist(lapply(erad_results_ts$all_effort, length) != 0)]
+  all_effort <- bind_rows(effort_list)
+  effort_array <- array(0, dim = c(2,length(all_days), length(all_quarters)))
   # Count the number of observed snake for each quarter & day that effort occurred
-  for(quarter in all_quarters) {
-    all_observations[[quarter]] <- as.data.frame(matrix(NA, nrow = 0, ncol = 2))
-    colnames(all_observations[[quarter]] <- c("num_snakes", "day")
-    for(day in all_days) {
-      all_observations[[quarter]]$num_snakes <- 
-  
-  
-  names(all_observations) <- paste0("Quarter_", )
-  
+  # for(quarter in all_quarters) {
+  #   for(day in all_days) {
+  for(quarter in 1:length(all_quarters)) {
+    for(day in 1:length(all_days)) {
+      for(method in 1:length(methods)) {
+        for(size in 1:length(size_class_names)) {
+          # Summarizing observations
+          observations_array[method,size,day,quarter] <-  nrow(all_observed[all_observed$size_category == size_class_names[size] & all_observed$day == all_days[day] & all_observed$quarter == all_quarters[quarter] & all_observed$method == methods[method],])
+        }
+        # Summarizing effort
+        if(length(all_effort$effort[all_effort$method == methods[method] & all_effort$day == all_days[day] & all_effort$quarter == all_quarters[quarter]]) > 0) {
+          effort_array[method, day, quarter] <- all_effort$effort[all_effort$method == methods[method] & all_effort$day == all_days[day] & all_effort$quarter == all_quarters[quarter]]
+        } else {
+          effort_array[method, day, quarter] <- 0
+        }
+      }
+    }
+  }
+  return(list(observation = observations_array,
+              effort = effort_array))
 }
 
+
+# # Test
+# q <- all_observations_fun(erad_results_ts = erad_quarter_results,
+#                           methods = erad_methods[c(2:3)])
 
 
 ## Create vector with the difference between all eradication effort days 
 
 
-
-effort_days <- list()
-for(method in 1:length(erad_methods)) {
-  effort_days[[method]] <- list()
-  for(quarter in 1:length(erad_quarters[[method]])) {
-    effort_days[[method]][[quarter]] <- vector()
-    for(day in 1:length(erad_days[[method]])) {
-      effort_days[[method]][[quarter]][day] <- (erad_quarters[[method]][quarter]*91)-91 + erad_days[[method]][day]
-    }
-  }
-  names(effort_days[[method]]) <- paste0("quarter_", erad_quarters[[method]])
-}
-names(effort_days) <- erad_methods
-all_effort_days <- sort(unique(unlist(effort_days)))
-# Difference between last visual survey day in quarter 2 week 5 to first visual survey day 
-# in week 9
-effort_days$visual$quarter_2[14] - effort_days$visual$quarter_2[7]
-effort_days$visual$quarter_7[7] - effort_days$visual$quarter_2[14]
-effort_days$visual$quarter_7[14] - effort_days$visual$quarter_7[7]
-
-all_days_btwn <- vector()
-for(t in 1:(length(all_effort_days)-1)) {
-  all_days_btwn[t] <- all_effort_days[t+1]-all_effort_days[t]
-}
+# 
+# effort_days <- list()
+# for(method in 1:length(erad_methods)) {
+#   effort_days[[method]] <- list()
+#   for(quarter in 1:length(erad_quarters[[method]])) {
+#     effort_days[[method]][[quarter]] <- vector()
+#     for(day in 1:length(erad_days[[method]])) {
+#       effort_days[[method]][[quarter]][day] <- (erad_quarters[[method]][quarter]*91)-91 + erad_days[[method]][day]
+#     }
+#   }
+#   names(effort_days[[method]]) <- paste0("quarter_", erad_quarters[[method]])
+# }
+# names(effort_days) <- erad_methods
+# all_effort_days <- sort(unique(unlist(effort_days)))
+# # Difference between last visual survey day in quarter 2 week 5 to first visual survey day 
+# # in week 9
+# effort_days$visual$quarter_2[14] - effort_days$visual$quarter_2[7]
+# effort_days$visual$quarter_7[7] - effort_days$visual$quarter_2[14]
+# effort_days$visual$quarter_7[14] - effort_days$visual$quarter_7[7]
+# 
+# all_days_btwn <- vector()
+# for(t in 1:(length(all_effort_days)-1)) {
+#   all_days_btwn[t] <- all_effort_days[t+1]-all_effort_days[t]
+# }
