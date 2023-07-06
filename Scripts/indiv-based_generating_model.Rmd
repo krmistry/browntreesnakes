@@ -1490,3 +1490,83 @@ ggplot(as.data.frame(cbind(SVL, mortality))) +
   geom_hline(yintercept = mortality_prob[[1]][1], color = "blue") +
   theme_bw()
 ```
+
+```{r estimation_inputs}
+
+### Three arrays needed for inputs into the removal-based estimation model:
+# - Total captured, in method x size class arrays, in a list for each day 
+# - Effort array, in method x day format
+# - Vector of the number of days betwen data collection dates
+### Using all visual survey and trapping results for this initial experiment (in the future, 
+### I probably won't use all the data collected
+
+# Transforming collection data into arrays
+# First, put all of the results data in one dataframe
+all_erad_results <- erad_quarter_results$all_observed[unlist(lapply(erad_quarter_results$all_observed, length) != 0)] %>%
+  melt(., id.vars = colnames(.[[1]]))
+
+# Adding size class column to make it easier to partition
+for(snake in 1:nrow(all_erad_results)) {
+  all_erad_results$size_class[snake] <- size_class_fun(all_erad_results$SVL[snake])
+}
+
+captured_list <- list()
+for(quarter in 1:length(unique(all_erad_results$quarter))) {
+  captured_list[[quarter]] <- list()
+  for(day in 1:length(unique(all_erad_results$day))) {
+    captured_list[[quarter]][[day]] <- as.data.frame(matrix(0, nrow = 2, ncol = 4))
+    colnames(captured_list[[quarter]][[day]]) <- size_class_names
+    rownames(captured_list[[quarter]][[day]]) <- erad_methods[c(2:3)]
+    day_results <- all_erad_results[all_erad_results$quarter == unique(all_erad_results$quarter)[quarter] & all_erad_results$day == unique(all_erad_results$day)[day],]
+    for(method in erad_methods[c(2:3)]) {
+      for(size in size_class_names) {
+      captured_list[[quarter]][[day]][method, size] <- nrow(day_results[day_results$size_class == size & day_results$method == method, ])
+      }
+    }
+  }
+}
+full_list <- c(captured_list[[1]], captured_list[[2]], captured_list[[2]], captured_list[[4]])
+
+### Configuring effort into a dataframe, 
+all_effort_results <- erad_quarter_results$all_effort[unlist(lapply(erad_quarter_results$all_effort, length) != 0)] %>%
+  melt(., id.vars = colnames(.[[1]])) %>%
+  .[.$method %in% erad_methods[c(2:3)],]
+
+## Full effort amounts, used to standardize
+daily_effort <- c("visual" = 4, "trap" = 12)
+
+## Standardizing effort 
+for(row in 1:nrow(all_effort_results)) {
+  all_effort_results$std_effort[row] <- all_effort_results$effort[row]/daily_effort[all_effort_results$method[row]]
+  
+}              
+
+
+
+effort_days <- list()
+for(method in 1:length(erad_methods)) {
+  effort_days[[method]] <- list()
+  for(quarter in 1:length(erad_quarters[[method]])) {
+    effort_days[[method]][[quarter]] <- vector()
+    for(day in 1:length(erad_days[[method]])) {
+      effort_days[[method]][[quarter]][day] <- (erad_quarters[[method]][quarter]*91)-91 + erad_days[[method]][day]
+    }
+  }
+  names(effort_days[[method]]) <- paste0("quarter_", erad_quarters[[method]])
+}
+names(effort_days) <- erad_methods
+all_effort_days <- sort(unique(unlist(effort_days)))
+
+# # Difference between last visual survey day in quarter 2 week 5 to first visual survey day 
+# # in week 9
+# effort_days$visual$quarter_2[14] - effort_days$visual$quarter_2[7]
+# effort_days$visual$quarter_7[7] - effort_days$visual$quarter_2[14]
+# effort_days$visual$quarter_7[14] - effort_days$visual$quarter_7[7]
+# 
+# all_days_btwn <- vector()
+# for(t in 1:(length(all_effort_days)-1)) {
+#   all_days_btwn[t] <- all_effort_days[t+1]-all_effort_days[t]
+# }
+
+
+```
