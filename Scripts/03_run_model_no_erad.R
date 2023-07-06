@@ -30,7 +30,7 @@ init_size_dist <- c("small" = 0.25,
                     "xlarge" = 0.25)
 
 # Two time steps will be used, one for the number of quarters, the other for number of days in the quarter
-quarter_time_step <- 60
+quarter_time_step <- 8
 day_time_step <- 91
 
 # Growth probability (p_g)
