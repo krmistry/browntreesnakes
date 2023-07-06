@@ -15,26 +15,26 @@ source(here("Scripts/02_results_functions.R"))
 
 # Parameters that may be changed or subject to sensitivity analysis or to simulate over
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 55
+area_size <- 10
 
 # Set carrying capacity for this population:
 K <- 119*area_size
 
 
-# # Set up initial population size based on previous model runs (may change this later):
-qrt_ts_5.11.23 <- readRDS(here("Data/quarter_timeseries_5.11.23_DD.rds"))
-last_quarter <- qrt_ts_5.11.23[[length(qrt_ts_5.11.23)]]
-N <- nrow(last_quarter)
-
-# Initial size distribution, based on previous model runs
-size_dist <- c("small" = nrow(last_quarter[last_quarter$SVL <= size_class_limits[1, 2],])/N,
-                "medium" = nrow(last_quarter[last_quarter$SVL > size_class_limits[2, 1] & last_quarter$SVL <= size_class_limits[2, 2],])/N,
-                "large" = nrow(last_quarter[last_quarter$SVL > size_class_limits[3, 1] & last_quarter$SVL <= size_class_limits[3, 2],])/N,
-                "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
+# # # Set up initial population size based on previous model runs (may change this later):
+# qrt_ts_5.11.23 <- readRDS(here("Data/quarter_timeseries_5.11.23_DD.rds"))
+# last_quarter <- qrt_ts_5.11.23[[length(qrt_ts_5.11.23)]]
+# N <- nrow(last_quarter)
+# 
+# # Initial size distribution, based on previous model runs
+# size_dist <- c("small" = nrow(last_quarter[last_quarter$SVL <= size_class_limits[1, 2],])/N,
+#                 "medium" = nrow(last_quarter[last_quarter$SVL > size_class_limits[2, 1] & last_quarter$SVL <= size_class_limits[2, 2],])/N,
+#                 "large" = nrow(last_quarter[last_quarter$SVL > size_class_limits[3, 1] & last_quarter$SVL <= size_class_limits[3, 2],])/N,
+#                 "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
 
 # # For initial population roughly based on 10 ha runs in the past:
-# N <- 1000
-# size_dist <- c(0.57, 0.09, 0.15, 0.19)
+N <- 100*area_size
+size_dist <- c(0.6, 0.1, 0.1, 0.2)
 
 
 # Growth probability (p_g)
@@ -62,6 +62,8 @@ erad_coverage$ADS <- 0.5
 erad_coverage$visual <- 0.2
 erad_coverage$trap <- 0.2
 erad_coverage$bait_tube <- 0.2
+# Overlap of ADS over transects
+ADS_overlap_on_transect <- 0.5
 
 
 # Running model 
@@ -99,7 +101,7 @@ effort_plot_1 <- ggplot(all_effort, aes(x = quarter, y = effort, fill = method))
   geom_col() +
   theme_bw()
 
-
+# Plotting observed removed snakes (captured through trapping and visual survey)
 observed_list <- erad_quarter_results$all_observed[unlist(lapply(erad_quarter_results$all_observed, length) != 0)]
 all_observed <- bind_rows(observed_list)
 for(snake in 1:nrow(all_observed)){
@@ -110,12 +112,18 @@ for(snake in 1:nrow(all_observed)){
 all_observed$size_category <- factor(all_observed$size_category, 
                                      levels = c("small", "medium", "large", "xlarge"))
 
-observed_plot_1 <- ggplot(all_observed , aes(x = day, y = SVL, color = method)) +
+# Scatter plot, SVL size on the y-axis, separated by quarter
+observed_plot_1 <- ggplot(all_observed, aes(x = day, y = SVL, color = method)) +
   geom_jitter() +
   theme_bw() +
   facet_wrap("quarter")
+# Bar plot
+observed_plot_2 <- ggplot(all_observed, aes(fill = size_category, x = quarter)) +
+  geom_bar(position = "dodge") +
+  facet_wrap("method") +
+  theme_bw()
 
-
+# Plotting unobserved removed snakes (killed through ADS and bait tubes)
 unobserved_list <- erad_quarter_results$all_unobserved[unlist(lapply(erad_quarter_results$all_unobserved, length) != 0)]
 all_unobserved <- bind_rows(unobserved_list[c(1:3)])
 for(snake in 1:nrow(all_unobserved)){
