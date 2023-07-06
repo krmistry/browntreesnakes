@@ -1,5 +1,7 @@
 library(jagsUI)
 
+# Trying this out, does it work
+
 # ## Fake data to experiment with:
 # # Fake removed individuals
 # removals_array <- array(0, dim = c(4,4,20))
