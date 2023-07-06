@@ -151,6 +151,7 @@ effort_erad_methods$visual <- 6
 effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
 effort_erad_methods$bait_tube <- 12 # Same as trap
 
-
+# Percentage of transects that occur within ADS coverage area:
+ADS_transect_overlap <- 0.5
 
 
