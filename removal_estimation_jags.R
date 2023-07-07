@@ -1,7 +1,15 @@
 library(jagsUI)
 
+# Reading in data generated on 7/7/23
+load(here("est_model_input_data.RData"))
+erad_quarter_results <- input_data$erad_quarter_results
+erad_methods <- input_data$erad_methods
+erad_days <- input_data$erad_days
+erad_quarters <- input_data$erad_quarters
+size_class_names <- input_data$size_class_names
+all_observed <- input_data$all_observed
 
-# Using output from 04_run_model_w_erad.R, not currently replicable from github
+# Reformatting removals and effort data to the format needed by estimation model
 erad_reformatted <- all_observations_fun(erad_results_ts = erad_quarter_results,
                                          methods = erad_methods[c(2:3)])
 removals_array <- erad_reformatted$observation
