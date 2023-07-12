@@ -1,13 +1,24 @@
 library(jagsUI)
+library(here)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+library(tictoc)
+library(fdrtool)
+
+## Loading objects and functions
+source(here("Scripts/00_user_inputs.R"))
+source(here("Scripts/01_model_functions.R"))
+source(here("Scripts/02_results_functions.R"))
 
 # Reading in data generated on 7/7/23
 load(here("est_model_input_data.RData"))
-erad_quarter_results <- input_data$erad_quarter_results
-erad_methods <- input_data$erad_methods
-erad_days <- input_data$erad_days
-erad_quarters <- input_data$erad_quarters
-size_class_names <- input_data$size_class_names
-all_observed <- input_data$all_observed
+# erad_quarter_results <- input_data$erad_quarter_results
+# erad_methods <- input_data$erad_methods
+# erad_days <- input_data$erad_days
+# erad_quarters <- input_data$erad_quarters
+# size_class_names <- input_data$size_class_names
+# all_observed <- input_data$all_observed
 
 # Reformatting removals and effort data to the format needed by estimation model
 erad_reformatted <- all_observations_fun(erad_results_ts = erad_quarter_results,
@@ -15,6 +26,12 @@ erad_reformatted <- all_observations_fun(erad_results_ts = erad_quarter_results,
 removals_array <- erad_reformatted$observation
 effort_array <- erad_reformatted$effort
 #effort_array[2,,] <- effort_array[2,,] + 1
+
+# Values needed for array dimensions & loops
+J <- 2 # number of eradication methods (vision & trap)
+K <- 4 # number of size classes
+I <- 14 # Secondary sampling periods (days within quarters)
+T <- 4 # Primary sampling periods (quarters)
 
 # Days between primary sampling periods (quarters 2, 3, 6 and 7)
 date_diff <- vector()
@@ -122,10 +139,6 @@ for(t in 1:T){ # start primary sampling period loop
 sink()
 
 
-J <- 2 # number of eradication methods (vision & trap)
-K <- 4 # number of size classes
-I <- 14 # Secondary sampling periods (days within quarters)
-T <- 4 # Primary sampling periods (quarters)
 
 # Initial values for N (i.e. N[1, k, 1, 1])
 Y <- removals_array
