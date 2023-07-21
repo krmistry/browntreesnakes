@@ -273,7 +273,7 @@ inits <- function (){
 
 # Bundle data together
 data <- list(Y = removals_array,
-             J = 2, K = 4, I = 2, T = 4, 
+             J = 2, K = 4, I = 14, T = 4, 
              xi = effort_array, 
              days_btwn = date_diff, 
              N.base = N.base)
