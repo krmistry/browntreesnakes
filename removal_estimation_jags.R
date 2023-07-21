@@ -113,10 +113,8 @@ for(t in 1:T) { # start primary sampling period loop
        for(k in 1:K) { # start size class loop
           # Calculate removals based on encounter probability and M (population in within i instance)
           Y[j,k,i-1,t] ~ dbin(p[j,i-1,t],M[j,k])
-          #Y[j,k,i-1,t] ~ dbin(p[j,i-1,t], 50)
           # Update M population in the next row to do the next removal method
            M[j+1,k] <- M[j,k] - Y[j,k,i-1,t]
-          #M[j+1,k] <- 6
        } # end size class loop
       } # end eradication method loop
       
@@ -132,7 +130,6 @@ for(t in 1:T) { # start primary sampling period loop
     # Calculate remaining population at the end of the primary sampling period
     R[k,t] <- N[k,I,t] - Y.sum[k,I-1,t]
   } # end size class loop
-  
 } # end primary sampling period loop
 
 for(t in 1:(T-1)){ # start primary sampling period loop
