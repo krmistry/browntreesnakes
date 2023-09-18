@@ -310,10 +310,12 @@ erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_quarter_resul
 
 removals_array_v2 <- erad_reformatted_v2$observation[1,,,] # array(dim = c(4,14,4))
 effort_array_v2 <- erad_reformatted_v2$effort[1,,] # array(dim = c(14,4))
+# Standardized version of effort array
+effort_array_v2.b <- effort_array_v2/12
 
 # Values needed for array dimensions & loops
 K <- 4 # number of size classes
-I <- 14 # Secondary sampling periods (days within quarters)
+I <- 10 # Secondary sampling periods (days within quarters) - can vary for each primary period
 Q <- 4 # Primary sampling periods (quarters)
 
 # Days between primary sampling periods when method is used
@@ -324,7 +326,6 @@ for(t in 1:(Q-1)) {
     ((erad_quarters[[2]][t]-1)*91 + max(unlist(erad_days[2])))
 }
 
-
 # JAGS Removal Estimation Model - version 2
 sink("removal_model_v2.jags")
 cat("
@@ -334,55 +335,79 @@ model {
 for(k in 1:K) {
   p.miss[1,k,1:1000] <- rep(1/1000,1000)
   miss[1,k] ~ dcat(p.miss[1,k,1:1000])
-  N[k,1,1] <-  N.base[k,1,1] + miss[1,k]
+  N[k,1,1] <-  N.base[k] + miss[1,k]
 }
 
 # Parameter priors
-beta.p[1] ~ dunif(0, 10) # encounter slope small
-beta.p[2] ~ dunif(0, 10) # encounter slope medium
-beta.p[3] ~ dunif(0, 10) # encounter slope for large
-beta.p[4] ~ dunif(0, 10) # encounter slope for x-large
-alpha.p[1] ~ dunif(-10,10) # encounter intercept small
-alpha.p[2] ~ dunif(-10,10) # encounter intercept medium
-alpha.p[3] ~ dunif(-10,10) # encounter intercept large
-alpha.p[4] ~ dunif(-10, 10) # encounter slope x-large
-s1 ~ dunif(0.9, 0.9999) # small survival 
-s2 ~ dunif(0.9, 0.9999) # medium survival 
-s3 ~ dunif(0.9, 0.99999) # large survival
-s4 ~ dunif(0.9, 0.99999) # x-large survival 
+# for(k in 1:K) {
+#   beta.p[k] ~ dunif(0, 10) # encounter slope, based on size class 
+#   alpha.p[k] ~ dunif(-10, 10) # encounter intercept, based on size class
+# }
+
+# Encounter hyperparameter priors
+beta.p[1] ~ dunif(0, 10)
+beta.p[2] ~ dunif(0, 10)
+beta.p[3] ~ dunif(0, 10)
+beta.p[4] ~ dunif(0, 10)
+alpha.p[1] ~ dunif(-10, 10)
+alpha.p[2] ~ dunif(-10, 10)
+alpha.p[3] ~ dunif(-10, 10)
+alpha.p[4] ~ dunif(-10, 10)
+# Fecundity priors
 f2 ~ dgamma(1,0.3) # medium fecundity
 f3 ~ dgamma(1,0.3) # large fecundity
 f4 ~ dgamma(1,0.3) # x-large fecundity
-t1 ~ dunif(0.001, 0.999) # transition small -> medium
-t2 ~ dunif(0.001, 0.999) # transition medium -> large
-t3 ~ dunif(0.001, 0.999) # transition large -> x-large
+# Survival hyperparameter priors
+nu ~ dunif(-10, 10)
+epsilon ~ dunif(0, 10)
+# Size transition hyperparameter priors
+rho ~ dunif(-10, 10)
+gamma ~ dunif(0, 10)
 
+# # Replacing these with logit link linear equations using days between as the predictor covariate
+# s1 ~ dunif(0.9, 0.9999) # small survival
+# s2 ~ dunif(0.9, 0.9999) # medium survival
+# s3 ~ dunif(0.9, 0.99999) # large survival
+# s4 ~ dunif(0.9, 0.99999) # x-large survival
+# t1 ~ dunif(0.001, 0.999) # transition small -> medium
+# t2 ~ dunif(0.001, 0.999) # transition medium -> large
+# t3 ~ dunif(0.001, 0.999) # transition large -> x-large
+
+for(t in 1:(Q-1)) {
+  # Survival rates for each size class in between each primary period
+  logit(s1[t]) <- nu + epsilon*days_btwn[t]
+  logit(s2[t]) <- nu + epsilon*days_btwn[t]
+  logit(s3[t]) <- nu + epsilon*days_btwn[t]
+  logit(s4[t]) <- nu + epsilon*days_btwn[t]
+  logit(t1[t]) <- rho + gamma*days_btwn[t]
+  logit(t2[t]) <- rho + gamma*days_btwn[t]
+  logit(t3[t]) <- rho + gamma*days_btwn[t]
+}
 
 # Transition matrix (used for population size class growth & reproduction between primary sampling periods)
 for(t in 1:(Q-1)){
-  P[1,1,t] <- s1^days_btwn[t]*(1-t1^days_btwn[t])
-  P[1,2,t] <- f2
-  P[1,3,t] <- f3
-  P[1,4,t] <- f4
-  P[2,1,t] <- s1^days_btwn[t]*t1^days_btwn[t]
-  P[2,2,t] <- s2^days_btwn[t]*(1-t2^days_btwn[t])
+  P[1,1,t] <- s1[t]*(1-t1[t]) # make s and t logit() linear equations (experiment with simulation results size class growth quarterly for equation shape)
+  P[1,2,t] <- f2*s1[t]
+  P[1,3,t] <- f3*s1[t]
+  P[1,4,t] <- f4*s1[t]
+  P[2,1,t] <- s1[t]*t1[t]
+  P[2,2,t] <- s2[t]*(1-t2[t])
   P[2,3,t] <- 0
   P[2,4,t] <- 0
   P[3,1,t] <- 0
-  P[3,2,t] <- s2^days_btwn[t]*t2^days_btwn[t]
-  P[3,3,t] <- s3^days_btwn[t]*(1-t3^days_btwn[t])
+  P[3,2,t] <- s2[t]*t2[t]
+  P[3,3,t] <- s3[t]*(1-t3[t])
   P[3,4,t] <- 0
   P[4,1,t] <- 0
   P[4,2,t] <- 0
-  P[4,3,t] <- s3^days_btwn[t]*t3^days_btwn[t]
-  P[4,4,t] <- s4^days_btwn[t]
+  P[4,3,t] <- s3[t]*t3[t]
+  P[4,4,t] <- s4[t]
 }
-
 
 for(t in 1:Q) { # start primary sampling period loop  
   for(k in 1:K) { # start size class loop
       for(i in 1:I) { # start secondary sampling instances loop
-      # Calculate encounter probability for each method, secondary sampling instance and primary sampling period
+      # Calculate encounter probability for each size class, secondary sampling instance and primary sampling period
         logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t]) # effort is not size-dependent
       # Calculate removals based on encounter probability and M (population in within i instance)
         Y[k,i,t] ~ dbin(p[k,i,t],N[k,i,t])
@@ -415,29 +440,24 @@ sink()
 ##################### Creating all inputs for jags model ###########
 # Initial values for N (i.e. N[k, 1, 1])
 Y <- removals_array_v2
-N.base <- array(NA_real_, dim = c(K, I, Q))
-for(k in 1:K) {
-  N.base[k,1,1] <- sum(Y[k,,1:Q])
-}
+N.base <- array(NA_real_, dim = K)
+for(k in 1:K) { # size class loop
+  N.base[k] <- sum(Y[k,,1:Q])
+} 
 
 # initialize D to > than the number that will be removed in the following year
-Y.remove1 <- vector()
-Y.remove2 <- vector()
-Y.remove3 <- vector()
-Y.remove4 <- vector()
-for(t in 1:Q){
-  Y.remove1[t] <- sum(Y[1,,t])
-  Y.remove2[t] <- sum(Y[2,,t])
-  Y.remove3[t] <- sum(Y[3,,t])
-  Y.remove4[t] <- sum(Y[4,,t])
+Y.remove <- array(NA, dim = c(K,Q))
+for(t in 1:Q){ # primary sampling period loop
+  for(k in 1:K) { # size class loop
+  Y.remove[k,t] <- sum(Y[k,,t])
+  }
 }
 
 D.init <- array(NA,dim = c(K,(Q-1)))
-for(t in 1:(Q-1)){
-  D.init[1,t] <- Y.remove1[t+1] + 1
-  D.init[2,t] <- Y.remove2[t+1] + 1
-  D.init[3,t] <- Y.remove3[t+1] + 1
-  D.init[4,t] <- Y.remove4[t+1] + 1
+for(t in 1:(Q-1)){ # between primary periods loop
+  for(k in 1:K) { # size class loop
+    D.init[k,t] <- Y.remove[k,t] + 1
+  }
 }
 
 # Initial values for select parameters
@@ -450,7 +470,7 @@ inits <- function (){
 
 # Bundle data together
 data <- list(Y = removals_array_v2,
-             K = 4, I = 14, Q = 4, 
+             K = K, I = I, Q = Q, 
              xi = effort_array_v2, 
              days_btwn = date_diff, 
              N.base = N.base)
@@ -481,14 +501,8 @@ output_jags <- jags(data,
 traceplot(output_jags, Rhat_min = 1.05)
 
 ## Traceplots of estimated parameters
-traceplot(output_jags, parameters = c("beta.p[1]", 
-                                      "beta.p[2]",
-                                      "beta.p[3]",
-                                      "beta.p[4]",
-                                      "alpha.p[1]",
-                                      "alpha.p[2]",
-                                      "alpha.p[3]",
-                                      "alpha.p[4]",
+traceplot(output_jags, parameters = c("beta.p", 
+                                      "alpha.p",
                                       "s1",
                                       "s2",
                                       "s3",
@@ -501,22 +515,32 @@ traceplot(output_jags, parameters = c("beta.p[1]",
                                       "t3"))
 
 ## Plotting mean values for N by size category to get quick loop at model outputs
-mean_N <- as.data.frame(matrix(0, nrow = Q, ncol = K))
+mean_N <- as.data.frame(matrix(0, nrow = Q, ncol = S))
 colnames(mean_N) <- size_class_names
 mean_N$Quarter <- sort(unique(unlist(erad_quarters)))
-for(size in 1:K) {
+for(size in 1:S) {
   for(quarter in 1:Q) {
-    mean_N[quarter, size] <- output_jags$mean$N[size,I,quarter]
+    mean_N[quarter, size] <- output_jags$mean$N[size,I[quarter],quarter]
   }
 }
 
 # Making data long for plotting
 mean_N_long <- melt(mean_N, id.vars = "Quarter")
 colnames(mean_N_long)[2:3] <- c("size_class", "N")
+# Adding lower and upper bounds for 95% confidence interval
+for(size in 1:S) {
+  for(quarter in 1:Q) {
+    row_counter <- quarter + (size-1)*4
+    mean_N_long$lower_bound[row_counter] <- output_jags$q2.5$N[size,I[quarter],quarter]
+    mean_N_long$upper_bound[row_counter] <- output_jags$q97.5$N[size,I[quarter],quarter]
+  }
+}
+
 # Plotting size class (mean) estimated abundance through time
 mean_N_plot_1 <- ggplot(mean_N_long, aes(x = Quarter, y = N, color = size_class)) +
   geom_line() +
-  geom_hline(yintercept = K) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound, fill = size_class), alpha = 0.2) +
+  #geom_hline(yintercept = K) +
   theme_bw()
   
 
@@ -533,6 +557,7 @@ for(size in size_class_names) {
   }
 }
 
+
 real_N_long <- melt(real_N, id.vars = "Quarter")
 colnames(real_N_long)[2:3] <- c("size_class", "N")
 observed_N_long <- melt(observed_N, id.vars = "Quarter")
@@ -540,11 +565,21 @@ colnames(observed_N_long)[2:3] <- c("size_class", "N")
 real_N_long$source <- "simulated"
 observed_N_long$source <- "removed"
 
+# Adding 0s for upper and lower confidence intervals, so it has the same columns as mean_N_long
+real_N_long$lower_bound <- NA
+real_N_long$upper_bound <- NA
+observed_N_long$lower_bound <- NA 
+observed_N_long$upper_bound <- NA
+
 # Combining simulated, removed and estimated for each size class in each quarter
-est_vs_sim_plot_1 <- ggplot(rbind(mean_N_long, real_N_long), aes(x = Quarter, y = N, color = source)) +
+est_vs_sim_plot_1 <- ggplot(data = rbind(mean_N_long, real_N_long), aes(x = Quarter, y = N, color = source)) +
   geom_line(size = 2) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.3, linetype = 0, fill = hue_pal()(1)) +
   facet_wrap("size_class", scales = "free_y") +
+  guides(fill = "none") +
   theme_bw()
+
+
 ## Plotting total estimated N vs total simulation N
 est_vs_sim_plot_2 <- ggplot(rbind(mean_N_long, real_N_long), aes(y = N, x = Quarter, fill = source)) +
   geom_col(position = "dodge") +
