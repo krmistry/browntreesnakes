@@ -14,7 +14,7 @@ source(here("Scripts/02_results_functions.R"))
 ############################ Estimation model version with merged I and J and with survival & size transition as logit linear equations ##########################
 # p is size-dependent (not method, yet - do that after this part is working)
 # I is quarter-dependent
-#saveRDS(erad_quarter_results, file = "consist_test_erad_quarter_results.rds")
+# saveRDS(erad_quarter_results, file = "consist_test_erad_quarter_results.rds")
 # consist_erad_quarter_results <- readRDS("consist_test_erad_quarter_results.rds")
 # Isolating methods used in this version:
 obs_methods <- erad_methods[c(2:3)]
@@ -64,14 +64,30 @@ for(k in 1:S) {
 }
 
 # Parameter priors
-beta.p[1] ~ dunif(0, 10) # encounter slope small
-beta.p[2] ~ dunif(0, 10) # encounter slope medium
-beta.p[3] ~ dunif(0, 10) # encounter slope for large
-beta.p[4] ~ dunif(0, 10) # encounter slope for x-large
-alpha.p[1] ~ dunif(-10,10) # encounter intercept small
-alpha.p[2] ~ dunif(-10,10) # encounter intercept medium
-alpha.p[3] ~ dunif(-10,10) # encounter intercept large
-alpha.p[4] ~ dunif(-10, 10) # encounter slope x-large
+# beta.p[1] ~ dunif(0, 10) # encounter slope small
+# beta.p[2] ~ dunif(0, 10) # encounter slope medium
+# beta.p[3] ~ dunif(0, 10) # encounter slope for large
+# beta.p[4] ~ dunif(0, 10) # encounter slope for x-large
+# alpha.p[1] ~ dunif(-10,10) # encounter intercept small
+# alpha.p[2] ~ dunif(-10,10) # encounter intercept medium
+# alpha.p[3] ~ dunif(-10,10) # encounter intercept large
+# alpha.p[4] ~ dunif(-10, 10) # encounter slope x-large
+
+for(k in 1:S) {
+  beta.p[k, 1] ~ dunif(0, 10)
+  beta.p[k, 2] ~ dunif(0, 10)
+  alpha.p[k, 1] ~ dunif(-10, 10)
+  alpha.p[k, 2] ~ dunif(-10,10)
+  for(v in vis_days) {
+  beta.p[k, v] <- beta.p[k,1] 
+  alpha.p[k, v] <- alpha.p[k,1]
+  }
+  for(r in trap_days) {
+  beta.p[k, r] <- beta.p[k,2]
+  alpha.p[k, r] <- alpha.p[k,2]
+  }
+}
+
 # s1 ~ dunif(0.9, 0.9999) # small survival 
 # s2 ~ dunif(0.9, 0.9999) # medium survival 
 # s3 ~ dunif(0.9, 0.99999) # large survival
@@ -109,21 +125,21 @@ for(t in 1:(Q-1)) {
 
 # Transition matrix (used for population size class growth & reproduction between primary sampling periods)
 for(t in 1:(Q-1)){
-  P[1,1,t] <- s1[t]*(1-t1[t])
+  P[1,1,t] <- s1[t]
   P[1,2,t] <- f2
   P[1,3,t] <- f3
   P[1,4,t] <- f4
-  P[2,1,t] <- s1[t]*t1[t]
-  P[2,2,t] <- s2[t]*(1-t2[t])
+  P[2,1,t] <- t1[t]
+  P[2,2,t] <- s2[t]
   P[2,3,t] <- 0
   P[2,4,t] <- 0
   P[3,1,t] <- 0
-  P[3,2,t] <- s2[t]*t2[t]
-  P[3,3,t] <- s3[t]*(1-t3[t])
+  P[3,2,t] <- t2[t]
+  P[3,3,t] <- s3[t]
   P[3,4,t] <- 0
   P[4,1,t] <- 0
   P[4,2,t] <- 0
-  P[4,3,t] <- s3[t]*t3[t]
+  P[4,3,t] <- t3[t]
   P[4,4,t] <- s4[t]
 }
 
@@ -133,7 +149,9 @@ for(t in 1:Q) { # start primary sampling period loop
       for(i in 1:I) { # start secondary sampling instances loop
       # Calculate encounter probability for each method, secondary sampling instance and primary sampling period
       # Odd columns are visual, even columns are trap
-        logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t]) # effort is not size-dependent
+        logit(p[k,i,t]) <- alpha.p[k,i] + beta.p[k,i] * log(xi[i,t])
+      #***** version below runs, but is not method specific *****
+      #  logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t]) # effort is not size-dependent
       # Calculate removals based on encounter probability and M (population in within i instance)
         Y[k,i,t] ~ dbin(p[k,i,t],N[k,i,t])
       # Calculate N using last time step N minus summed removals
@@ -159,7 +177,7 @@ for (t in 1:(Q-1)) { # start operations between primary sampling period loop
 for(t in 1:Q) { #start primary sampling period loop
   # Summing all size classes into a single N for each primary sampling period
   N.sum[t] <- sum(N[,1,t])
-}
+} # end primary sampling period loop
 
 } # end model
 ", fill= TRUE)
@@ -195,18 +213,24 @@ for(t in 1:(Q-1)){
 
 # Initial values for select parameters
 inits <- function (){
-  list(D = D.init,
-       beta.p = runif(4,0,10),
-       alpha.p = runif(4,-10,10))
+  list(D = D.init)
+       # beta.p = runif(4,0,10),
+       # alpha.p = runif(4,-10,10))
   
 }
+
+# Creating vectors for trap and vis days
+vis_days <- seq(3, I[1], 2)
+trap_days <- seq(4, I[1], 2)
 
 # Bundle data together
 data <- list(Y = removals_array_v2,
              S = S, I = I[1], Q = Q, 
              xi = effort_array_v2, 
              days_btwn = date_diff, 
-             N.base = N.base)
+             N.base = N.base,
+             vis_days = vis_days,
+             trap_days = trap_days)
 
 # Parameters monitored
 parameters <- c("N", "N.sum", "alpha.p", "beta.p", "s1", "s2", "s3", "s4", 
@@ -273,13 +297,13 @@ abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[6]]), col = "re
 
 par(mfrow = c(2, 2))
 hist(mean_outputs$p_vis$small, xlim = c(0, 0.02))
-abline(v = mortality_prob_erad_methods$visual[1]/100, col = "red")
+abline(v = mortality_prob_erad_methods$visual[1]/100*erad_coverage$visual, col = "red")
 hist(mean_outputs$p_vis$medium)
-abline(v = mortality_prob_erad_methods$visual[2]/100, col = "red")
+abline(v = mortality_prob_erad_methods$visual[2]/100*erad_coverage$visual, col = "red")
 hist(mean_outputs$p_vis$large)
-abline(v = mortality_prob_erad_methods$visual[3]/100, col = "red")
+abline(v = mortality_prob_erad_methods$visual[3]/100*erad_coverage$visual, col = "red")
 hist(mean_outputs$p_vis$xlarge)
-abline(v = mortality_prob_erad_methods$visual[4]/100, col = "red")
+abline(v = mortality_prob_erad_methods$visual[4]/100*erad_coverage$visual, col = "red")
 
 hist(mean_outputs$p_trap$small)
 hist(mean_outputs$p_trap$medium)
@@ -327,3 +351,9 @@ q_data[[1]][q_data[[1]]$ID == snake_ID,]
 ## Real p values:
 # visual: 0.3032118 0.3409591 0.3534641 0.2989624 
 # trap: 0.1630739 0.2573346 0.4453922 0.4016056 
+
+
+
+
+
+
