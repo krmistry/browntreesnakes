@@ -1,0 +1,113 @@
+---
+title: "BTS Eradication Scenario 1"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+library(here)
+library(tictoc)
+library(fdrtool)
+library(jagsUI)
+library(scales)
+
+source(here("Scripts/00_user_inputs.R"))
+source(here("Scripts/01_model_functions.R"))
+source(here("Scripts/02_results_functions.R"))
+```
+
+## Target area for eradication
+
+-   Close population (by necessity, since the model requires that currently)
+-   approximately 25 ha, in a rectangular shape; 220 m wide X 1130 m long
+    -   220 m is the length of the transects used in the 5 ha CP area, which many experiments used and so calculating costs should be fairly easy
+-   56 transects, with 20 m between transects, with traps spaced every 20 m on the transect
+    -   Based on design for HMU experiment, although they also had bait tubes interspersed evenly between traps, so it was trap - 10 m - tube - 10 m - trap, etc
+
+#### Eradication scenario alternatives & choices
+
+-   6 consequetive weeks of trapping per transect, with 6 neighboring transects being trapped at a time
+    -   Also based on HMU experimental design
+    -   6 transects is a little over10% of the area, so if in each quarter a new 10% is trapped, it will take 9 quarters to cover the entire area
+-   ADS needs to occur outside of trapping & visual survey weeks - it can occur in the 11th, 12th or 1st weeks of the quarter
+    -   Target area coverage for ADS can vary, from 0 - 100% for alternative management choices in this scenario
+    -   Target ADS bait density = 120 cartridges/ha/day, using an automatic release system that drops 1 cartridge/9 m. The flight path will be 9 m apart, in a back and forth pattern to provide full coverage of an area.
+        -   Based on Goetz et al. 2021, which used the maximum rate of release allowed by the EPA. They didn't cite why they chose 9 m apart for the flight path, but it seems likely that is based on past research (i.e. the automatic release system drops 1 cartridge per 9 m, presumably based on past research about attractiveness/effectiveness of the bait) - it would be good to check though, to see if I can get a better reference for this choice.
+-   Visual survey on 2nd and 10th weeks of quarter (before and after trapping)
+    -   Visual surveys could also occur during the trapping weeks, that could be an alternatives choice (probably based on cost)
+
+```{r set_up}
+
+# Adjusting effort hours per method if necessary (there are defaults)
+effort_erad_methods <- list()
+effort_erad_methods$ADS <- 4
+effort_erad_methods$visual <- 4*2
+effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
+effort_erad_methods$bait_tube <- 12 # Same as trap
+
+# Parameters that may be changed or subject to sensitivity analysis or to simulate over
+# Set study/eradication area size, which dictates both K and the initial population
+area_size <- 20
+
+# Set carrying capacity for this population:
+K <- 119*area_size
+
+## For initial population roughly based on 10 ha runs in the past:
+N <- 100*area_size
+size_dist <- c(0.6, 0.1, 0.1, 0.2)
+
+
+# Growth probability (p_g)
+g_density_prob <- 0.75 
+
+# Number of quarters to generate
+erad_quarter_time_step <- 8
+day_time_step <- 91
+
+# Quarters where eradication methods are used, and which days in that quarter:
+erad_quarters <- list()
+erad_quarters$ADS <- c(3, 6)
+erad_quarters$visual <- c(2, 3, 6, 7)
+erad_quarters$trap <- c(3, 6)
+erad_quarters$bait_tube <- c(2, 3, 6, 7)
+erad_days <- list()
+erad_days$ADS <- c(7,14,21)
+erad_days$visual <- c(28:34, 56:62)
+erad_days$trap <- c(56:62)
+erad_days$bait_tube <- c(28:34)
+
+# Coverage for each method (totally arbitrary, adjust later)
+erad_coverage <- list()
+erad_coverage$ADS <- 0.8
+erad_coverage$visual <- 0.5
+erad_coverage$trap <- 0.5
+erad_coverage$bait_tube <- 0.5
+# Overlap of ADS over transects
+ADS_overlap_on_transect <- 0.75 # i.e. total area coverage, by at least one method 
+```
+
+```{r eradication_run}
+# Running model 
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method = erad_methods)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+
+```
