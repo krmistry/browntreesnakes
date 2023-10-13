@@ -5,6 +5,7 @@ library(ggplot2)
 library(dplyr)
 library(tictoc)
 library(fdrtool)
+library(scales)
 
 ## Loading objects and functions
 source(here("Scripts/00_user_inputs.R"))
@@ -29,9 +30,10 @@ erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_quarter_resul
 ##### Reformatting to merge I and J into one dimension, with odds being visual and evens being trap
 
 # Values needed for array dimensions & loops
-S <- 4 # number of size classes -- CHANGE THIS PARAMATER NAME - CAN'T BE THE SAME AS DD PARAMETER!!!!
-I <- rep(length(erad_days[[obs_methods[1]]])*2, 4) # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
-Q <- 4 # Primary sampling periods (quarters)
+S <- 4 # number of size classes
+Q <- length(unique(unlist(erad_quarters[obs_methods]))) # Primary sampling periods (quarters)
+I <- rep(max(length(erad_days[[obs_methods[1]]]), length(erad_days[[obs_methods[2]]]))*2, Q) # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
+
 
 removals_array_v2 <- array(dim = c(S, I[1], Q))
 effort_array_v2 <- array(dim = c(I[1], Q))
@@ -50,6 +52,12 @@ for(t in 1:(Q-1)) {
     ((erad_quarters[[2]][t]-1)*91 + max(unlist(erad_days[2])))
 }
 
+## Quarters when ADS occurrs 
+ADS_quarters <- erad_quarters$ADS
+# Sorting out which intermediary periods that ADS occurred (1) and when it didn't (2), so 2 different survival rates can be calculated
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
+ADS_quarter_counter <- c(1,1,2,1,2,1,1,2,1,1,2,1,1,1,2)
+
 
 # JAGS Removal Estimation Model - version 2
 sink("removal_model_v2.jags")
@@ -64,20 +72,12 @@ for(k in 1:S) {
 }
 
 # Parameter priors
-# beta.p[1] ~ dunif(0, 10) # encounter slope small
-# beta.p[2] ~ dunif(0, 10) # encounter slope medium
-# beta.p[3] ~ dunif(0, 10) # encounter slope for large
-# beta.p[4] ~ dunif(0, 10) # encounter slope for x-large
-# alpha.p[1] ~ dunif(-10,10) # encounter intercept small
-# alpha.p[2] ~ dunif(-10,10) # encounter intercept medium
-# alpha.p[3] ~ dunif(-10,10) # encounter intercept large
-# alpha.p[4] ~ dunif(-10, 10) # encounter slope x-large
 
 for(k in 1:S) {
   beta.p[k, 1] ~ dunif(0, 10)
   beta.p[k, 2] ~ dunif(0, 10)
-  alpha.p[k, 1] ~ dunif(-10, 10)
-  alpha.p[k, 2] ~ dunif(-10,10)
+  alpha.p[k, 1] ~ dunif(-20, 10)
+  alpha.p[k, 2] ~ dunif(-20,10)
   for(v in vis_days) {
   beta.p[k, v] <- beta.p[k,1] 
   alpha.p[k, v] <- alpha.p[k,1]
@@ -88,58 +88,67 @@ for(k in 1:S) {
   }
 }
 
-# s1 ~ dunif(0.9, 0.9999) # small survival 
-# s2 ~ dunif(0.9, 0.9999) # medium survival 
-# s3 ~ dunif(0.9, 0.99999) # large survival
-# s4 ~ dunif(0.9, 0.99999) # x-large survival 
-f2 ~ dgamma(1,0.3) # medium fecundity
-f3 ~ dgamma(1,0.3) # large fecundity
-f4 ~ dgamma(1,0.3) # x-large fecundity
-# t1 ~ dunif(0.001, 0.999) # transition small -> medium
-# t2 ~ dunif(0.001, 0.999) # transition medium -> large
-# t3 ~ dunif(0.001, 0.999) # transition large -> x-large
+## Survival hyperparameter - one set for when ADS has occurred, one for when it hasn't
+# 
+# for(m in 1:2) {
+#   s1.day[m] ~ dbeta(1,1)
+#   s2.day[m] ~ dbeta(1,1)
+#   s3.day[m] ~ dbeta(1,1)
+#   s4.day[m] ~ dbeta(1,1)
+# }
+s1.day ~ dbeta(1,1)
+s2.day ~ dbeta(1,1)
+s3.day ~ dbeta(1,1)
+s4.day ~ dbeta(1,1)
 
 
-for(k in 1:S) {
-  # Survival hyperparameter priors
-  nu[k] ~ dunif(-50, 50)
-  epsilon[k] ~ dunif(0, 50)
-}
-for(k in 1:(S-1)) {
-  # Size transition hyperparameter priors
-  rho[k] ~ dunif(-50, 50)
-  gamma [k] ~ dunif(0, 50)
-}
+# Size transition hyperparameter
+t1.day ~ dbeta(1,2) # small -> medium
+t2.day ~ dbeta(1,2) # medium -> large
+t3.day ~ dbeta(1,2) # large -> xlarge
 
+# Fecundity hyperparameter
+f2.day ~ dgamma(1,0.3) # medium
+f3.day ~ dgamma(1,0.3) # for both large and xlarge
+
+# Setting up parameters to be sensitive to days between primary sampling periods
 for(t in 1:(Q-1)) {
-  # Survival rates for each size class in between each primary period
-  logit(s1[t]) <- nu[1] + epsilon[1]*days_btwn[t]
-  logit(s2[t]) <- nu[2] + epsilon[2]*days_btwn[t]
-  logit(s3[t]) <- nu[3] + epsilon[3]*days_btwn[t]
-  logit(s4[t]) <- nu[4] + epsilon[4]*days_btwn[t]
-  logit(t1[t]) <- rho[1] + gamma[1]*days_btwn[t]
-  logit(t2[t]) <- rho[2] + gamma[2]*days_btwn[t]
-  logit(t3[t]) <- rho[3] + gamma[3]*days_btwn[t]
+  # Survival
+  # s1[t] <- pow(s1.day[ADS_quarter_counter[t]], days_btwn[t])
+  # s2[t] <- pow(s2.day[ADS_quarter_counter[t]], days_btwn[t])
+  # s3[t] <- pow(s3.day[ADS_quarter_counter[t]], days_btwn[t])
+  # s4[t] <- pow(s4.day[ADS_quarter_counter[t]], days_btwn[t])
+  s1[t] <- pow(s1.day, days_btwn[t])
+  s2[t] <- pow(s2.day, days_btwn[t])
+  s3[t] <- pow(s3.day, days_btwn[t])
+  s4[t] <- pow(s4.day, days_btwn[t])
+  # Size transition
+  t1[t] <- pow(t1.day, days_btwn[t])
+  t2[t] <- pow(t2.day, days_btwn[t])
+  t3[t] <- pow(t3.day, days_btwn[t])
+  # Fecundity
+  f2[t] <- pow(f2.day, days_btwn[t])
+  f3[t] <- pow(f3.day, days_btwn[t])
+  f4[t] <- f3[t]
 }
-
 
 # Transition matrix (used for population size class growth & reproduction between primary sampling periods)
 for(t in 1:(Q-1)){
-  P[1,1,t] <- s1[t]
-  P[1,2,t] <- f2
-  P[1,3,t] <- f3
-  P[1,4,t] <- f4
-  P[2,1,t] <- t1[t]
-  P[2,2,t] <- s2[t]
+  P[1,1,t] <- s1[t]*(1-t1[t])
+  P[1,2,t] <- f2[t]
+  P[1,3,t] <- f3[t]
+  P[1,4,t] <- f4[t]
+  P[2,1,t] <- t1[t]*s1[t]
+  P[2,2,t] <- s2[t]*(1-t2[t])
   P[2,3,t] <- 0
   P[2,4,t] <- 0
   P[3,1,t] <- 0
-  P[3,2,t] <- t2[t]
-  P[3,3,t] <- s3[t]
+  P[3,2,t] <- t2[t]*s2[t]
+  P[3,3,t] <- s3[t]*(1-t3[t])
   P[3,4,t] <- 0
   P[4,1,t] <- 0
   P[4,2,t] <- 0
-  P[4,3,t] <- t3[t]
+  P[4,3,t] <- t3[t]*s3[t]
   P[4,4,t] <- s4[t]
 }
 
@@ -231,10 +240,13 @@ data <- list(Y = removals_array_v2,
              N.base = N.base,
              vis_days = vis_days,
              trap_days = trap_days)
+             # ADS_quarters = ADS_quarters,
+             # ADS_quarter_counter = ADS_quarter_counter)
 
 # Parameters monitored
 parameters <- c("N", "N.sum", "alpha.p", "beta.p", "s1", "s2", "s3", "s4", 
-                "f2", "f3", "f4", "t1", "t2", "t3", "p",  "R", "D", "nu", "epsilon", "rho", "gamma")
+                "f2", "f3", "f4", "t1", "t2", "t3", "p",  "R", "D", "s1.day", "s2.day", "s3.day", "s4.day", "t1.day", "t2.day", "t3.day",
+                "f2.day", "f3.day")
 
 # MCMC settings
 ni <- 20000
@@ -252,6 +264,25 @@ output_jags <- jags(data,
                     n.iter = ni,
                     n.burnin = nb)
 
+# Traceplots of key parameters
+traceplot(output_jags, parameters = c("s1","s2","s3","s4"))
+traceplot(output_jags, parameters = c("s1.day", "s2.day", "s3.day", "s4.day"))
+traceplot(output_jags, parameters = c("t1","t2","t3"))
+traceplot(output_jags, parameters = c("t1.day", "t2.day", "t3.day"))
+traceplot(output_jags, parameters = c("f2","f3","f4"))
+traceplot(output_jags, parameters = c("f2.day", "f3.day"))
+traceplot(output_jags, parameters = c("p"))
+traceplot(output_jags, parameters = c("alpha.p"))
+traceplot(output_jags, parameters = c("beta.p"))
+
+
+# Mean N estimates vs simulated real N
+est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
+                       erad_quarter_results = erad_quarter_results,
+                       erad_quarters = erad_quarters)
+
+
+
 ##### Testing model consistency with the same input results - run 50 times
 consist_test_output_jags <- list()
 for(iter in 1:50) {
@@ -268,8 +299,8 @@ for(iter in 1:50) {
 }
 
 ## Saving and restoring the 50 run consistency check data
-# saveRDS(consist_test_output_jags, file = "consistency_test_outputs_8.16.23.rds")
-# consist_test_output_jags <- readRDS("consistency_test_outputs_8.16.23.rds")
+# saveRDS(consist_test_output_jags, file = "consistency_test_outputs_9.27.23.rds")
+# consist_test_output_jags <- readRDS("consistency_test_outputs_9.27.23.rds")
 
 mean_outputs <- list()
 mean_outputs$N_sum <- as.data.frame(matrix(NA, nrow = 50, ncol = 3))
@@ -289,21 +320,21 @@ for(iter in 1:50) {
 
 par(mfrow = c(1,3))
 hist(mean_outputs$N_sum$Quarter_1)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[2]]), col = "red")
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[2]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_2)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[3]]), col = "red")
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[3]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_3)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[6]]), col = "red")
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[6]]), col = "red")
 
 par(mfrow = c(2, 2))
 hist(mean_outputs$p_vis$small, xlim = c(0, 0.02))
-abline(v = mortality_prob_erad_methods$visual[1]/100*erad_coverage$visual, col = "red")
+abline(v = mortality_prob_erad_methods$visual[1]*erad_coverage$visual, col = "red")
 hist(mean_outputs$p_vis$medium)
-abline(v = mortality_prob_erad_methods$visual[2]/100*erad_coverage$visual, col = "red")
-hist(mean_outputs$p_vis$large)
-abline(v = mortality_prob_erad_methods$visual[3]/100*erad_coverage$visual, col = "red")
-hist(mean_outputs$p_vis$xlarge)
-abline(v = mortality_prob_erad_methods$visual[4]/100*erad_coverage$visual, col = "red")
+abline(v = mortality_prob_erad_methods$visual[2]*erad_coverage$visual, col = "red")
+hist(mean_outputs$p_vis$large, xlim = c(0.0002, 0.002))
+abline(v = mortality_prob_erad_methods$visual[3]*erad_coverage$visual, col = "red")
+hist(mean_outputs$p_vis$xlarge, xlim = c(0.001, 0.020))
+abline(v = mortality_prob_erad_methods$visual[4]*erad_coverage$visual, col = "red")
 
 hist(mean_outputs$p_trap$small)
 hist(mean_outputs$p_trap$medium)
@@ -322,27 +353,6 @@ p_2 <- output_jags$sims.list$p[,,seq(2, 29, 2),] # there are 0s in here from the
 p_2_v2 <- p_2[,,8:14,2:3] # trapping only occurred in quarters 2 & 3, in second 2 weeks of quarters
 
 
-# Figuring out what input range for the survival and transition probability hyperparameters
-q_data <- erad_quarter_results$quarter_timeseries[c(2,3,7,8)]
-# Adding size classification to results 
-for(quarter in 1:length(q_data)) {
-  for(snake in 1:nrow(q_data[[quarter]])) {
-    q_data[[quarter]]$size_class[snake] <- size_class_fun(q_data[[quarter]]$SVL[snake])
-  }
-}
-
-offspring <- vector() # new snakes born each quarter
-small_to_medium <- vector() # snakes that grew from small to medium between quarters
-medium_to_large <- vector() # snakes that grew from medium to large between quarters
-large_to_xlarge <- vector() # snakes that grew from large to x-large between quarters
-small_survival <- vector() # small snakes that survived between quarters
-medium_survival <- vector() # medium snakes that survived between quarters
-large_survival <- vector() # large snakes that survived between quarters
-
-snake_ID <- q_data[[1]]$ID[1]
-q_data[[1]][q_data[[1]]$ID == snake_ID,] 
-
-
 
 ## Model estimated p values:
 # visual: small = 0.07383756, medium = 0.08769911, large = 0.12376324, xlarge = 0.14988058
@@ -352,7 +362,86 @@ q_data[[1]][q_data[[1]]$ID == snake_ID,]
 # visual: 0.3032118 0.3409591 0.3534641 0.2989624 
 # trap: 0.1630739 0.2573346 0.4453922 0.4016056 
 
+### Calculate true vital rates from input data
+true_vital_rates <- true_vital_rates_v1_fun(all_erad_quarters = erad_quarters[c("visual","trap")],
+                          erad_results_df = erad_quarter_results)
 
+### For hyperparameter priors for survival and size transition, calculating linear models to get 
+### slopes and intercepts (days between eradication periods is the only covariate)
+
+# Survival
+survival_lm_df <- as.data.frame(cbind(c(true_vital_rates$survival[1, 2],
+                                        true_vital_rates$survival[1, 3], 
+                                        true_vital_rates$survival[1, 4]),
+                                      c(true_vital_rates$survival[2, 2],
+                                          true_vital_rates$survival[2, 3], 
+                                          true_vital_rates$survival[3, 4]),
+                                      c(true_vital_rates$survival[3, 2],
+                                        true_vital_rates$survival[3, 3], 
+                                        true_vital_rates$survival[3, 4]),
+                                      c(true_vital_rates$survival[4, 2],
+                                        true_vital_rates$survival[4, 3], 
+                                        true_vital_rates$survival[4, 4]),
+                        date_diff))
+colnames(survival_lm_df)[1:4] <- size_class_names
+# Linear models for each size class
+Su <- list()
+Su$small <- lm(small ~ date_diff, survival_lm_df)
+Su$medium <- lm(medium ~ date_diff, survival_lm_df)
+Su$large <- lm(large ~ date_diff, survival_lm_df)
+Su$xlarge <- lm(xlarge ~ date_diff, survival_lm_df)
+
+# Collecting intercepts and slopes from above sizes to see if they are different enough to warrant different priors
+S_intercepts <- vector()
+S_slopes <- vector()
+for(size in 1:4) {
+  S_intercepts[size] <- Su[[size]]$coefficients[1]
+  S_slopes[size] <- Su[[size]]$coefficients[2]
+}
+## With test case (55 ha pop)
+# > S_slopes
+# [1] -0.001256043 -0.002589571 -0.001520559 -0.001290379
+# > S_intercepts
+# [1] 0.9777542 0.7986311 0.7575742 0.7723645
+
+
+# Size transition
+size_transition_lm_df <- as.data.frame(cbind(c(true_vital_rates$size_transition[1, 2],
+                                        true_vital_rates$size_transition[1, 3], 
+                                        true_vital_rates$size_transition[1, 4]),
+                                      c(true_vital_rates$size_transition[2, 2],
+                                        true_vital_rates$size_transition[2, 3], 
+                                        true_vital_rates$size_transition[3, 4]),
+                                      c(true_vital_rates$size_transition[3, 2],
+                                        true_vital_rates$size_transition[3, 3], 
+                                        true_vital_rates$size_transition[3, 4]),
+                                      date_diff))
+colnames(size_transition_lm_df)[1:3] <- size_class_names[-1]
+# Linear models for each size class
+ST <- list()
+ST$medium <- lm(medium ~ date_diff, size_transition_lm_df)
+ST$large <- lm(large ~ date_diff, size_transition_lm_df)
+ST$xlarge <- lm(xlarge ~ date_diff, size_transition_lm_df)
+
+# Collecting intercepts and slopes from above sizes to see if they are different enough to warrant different priors
+ST_intercepts <- vector()
+ST_slopes <- vector()
+for(size in 1:3) {
+  ST_intercepts[size] <- ST[[size]]$coefficients[1]
+  ST_slopes[size] <- ST[[size]]$coefficients[2]
+}
+## With test case (55 ha pop)
+# > ST_intercepts
+# [1]  0.003838999 -0.008183079  0.008495881
+# > ST_slopes
+# [1] 1.161147e-04 7.669384e-04 7.134546e-05
+
+
+
+# Fecundity true value (used to evaluate prior choice)
+true_vital_rates$fecundity
+## Current prior is gamma(alpha = 1, beta = 0.3), and that would encompass these values, 
+## so the prior should be fine, I think
 
 
 
