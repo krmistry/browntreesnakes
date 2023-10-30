@@ -140,18 +140,16 @@ for(method in 1:length(mortality_prob_erad_methods)) {
 }
 
 # Artificially increasing detection rates while I'm working on making the estimation model work
-mortality_prob_erad_methods[[2]] <- mortality_prob_erad_methods[[2]]*10
-mortality_prob_erad_methods[[3]] <- mortality_prob_erad_methods[[3]]*10
-mortality_prob_erad_methods[[4]] <- mortality_prob_erad_methods[[4]]*10
+# mortality_prob_erad_methods[[2]] <- mortality_prob_erad_methods[[2]]*100
+# mortality_prob_erad_methods[[3]] <- mortality_prob_erad_methods[[3]]*100
+# mortality_prob_erad_methods[[4]] <- mortality_prob_erad_methods[[4]]*10
 
 # Standard amount of effort per day for each eradication method, in hours (placeholders, figure out what the actual number of hours is later)
 effort_erad_methods <- list()
 effort_erad_methods$ADS <- 4
-effort_erad_methods$visual <- 6
+effort_erad_methods$visual <- 4*2
 effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
 effort_erad_methods$bait_tube <- 12 # Same as trap
 
-# Percentage of transects that occur within ADS coverage area:
-ADS_transect_overlap <- 0.5
 
 
