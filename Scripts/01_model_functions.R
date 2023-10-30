@@ -51,7 +51,7 @@ repro_females_fun <- function(start_pop,
   females <- start_pop[start_pop$sex == "F",]
   # Coin flip for whether or not reproduction occurs
   for(snake in 1:nrow(females)) {
-    # Coin flip of whether reproduction occurs is based on both density dependence and the     probablity that the individual snake will be able to reproduce based on its size
+    # Coin flip of whether reproduction occurs is based on both density dependence and the probability that the individual snake will be able to reproduce based on its size
     if (rbinom(1, 1, prob = density_prob*females$repro_prob[snake]) == 1) {
       females$mom_status[snake] <- 1
     } else {
@@ -243,6 +243,25 @@ mortality_decay_fun <- function(snake_SVL,
 # mortality_decay_fun(1500)
   
 
+# # Plot bait susceptibility vs SVL 
+# SVL <- c(350:1800)
+# mortality_probability <- vector()
+# for(i in 1:length(SVL)){
+#   mortality_probability[i] <- diet_trans_fun(SVL[i])*mortality_decay_fun(SVL[i])
+# }
+# ggplot(data = as.data.frame(cbind(SVL, mortality_probability))) +
+#   geom_line(aes(x = SVL, y = mortality_probability)) +
+#   geom_vline(xintercept = 850, color = "#7CAE00") +
+#   geom_vline(xintercept = 950, color = "#00BFC4") +
+#   geom_vline(xintercept = 1150, color = "#C77CFF") +
+#   annotate(geom = "text",
+#            x = size_class_limits[-1,1]+20,
+#            y = 0.1,
+#            label = size_class_names[-1],
+#            angle = 90) +
+#   theme_bw()
+  
+
 ### Function to perform all eradication methods 
 ## Inputs:
 # - day_pop = starting population for that day 
@@ -425,28 +444,42 @@ erad_timing_fun <- function(day,
   effort <- list()
   for(method in 1:length(erad_method)) {
     method_name <- erad_method[method]
-    print(method_name)
+    #print(method_name)
     #pop <- survivors[[method]]
     #if(quarter %in% erad_quarters[[method_name]] & day %in% erad_days[[method_name]]){
-      if(method_name == erad_methods[1]) {
+      if(method_name == "ADS") {
+        if(nrow(ADS_encounter_pop) > 0) {
         erad_pop <- eradication_fun(encounter_pop = ADS_encounter_pop, 
                                     mortality_prob = mortality_prob_erad_methods[[method_name]],
                                     method = method_name)
         ADS_surviving_pop <- erad_pop$alive_snakes
         overlap_dead_snake_IDs <- which(transect_encounter_pop[[method]]$ID %in% erad_pop$dead_snakes$ID)
-        transect_encounter_pop[[method+1]] <- transect_encounter_pop[[method]][-overlap_dead_snake_IDs,]
+        } else {
+          overlap_dead_snake_IDs <- 0
+        } 
+        if(length(overlap_dead_snake_IDs) > 0) { 
+          transect_encounter_pop[[method+1]] <- transect_encounter_pop[[method]][-overlap_dead_snake_IDs,]
+        } else {
+          transect_encounter_pop[[method+1]] <- transect_encounter_pop[[method]]
+        }
       } else {
+        if(nrow(transect_encounter_pop[[method]]) > 0){
         erad_pop <- eradication_fun(encounter_pop = transect_encounter_pop[[method]], 
                                     mortality_prob = mortality_prob_erad_methods[[method_name]],
                                     method = method_name)
         transect_encounter_pop[[method+1]] <- erad_pop$alive_snakes
+        } else {
+          transect_encounter_pop[[method+1]] <- transect_encounter_pop[[method]]
+        }
       }
-      effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
+    # Tracking effort for each method  
+    effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
                                                    "day" = day,
                                                    "quarter" = quarter))
       
       # Eradication with bodies occurs:
-      if(nrow(erad_pop$dead_snakes) > 0) {
+      if(exists("erad_pop") == TRUE) {
+        if(nrow(erad_pop$dead_snakes) > 0) {
         if (method_name %in% erad_methods[c(2:3)]) {
           observed[[method_name]] <- erad_pop$dead_snakes
           observed[[method_name]]$day <- day
@@ -456,19 +489,19 @@ erad_timing_fun <- function(day,
           unobserved[[method_name]]$day <- day
           unobserved[[method_name]]$quarter <- quarter
         }
+        }
       }
-    #}
   }
   
   # Combine the surviving snakes from the different methods (ignoring duplicates for now)
   if(exists("ADS_surviving_pop") == TRUE) {
     final_survivors <- rbind(ADS_surviving_pop, 
                               transect_encounter_pop[[length(transect_encounter_pop)]])
-    print(paste0("ADS survivors = ", nrow(ADS_surviving_pop)))
+     # print(paste0("ADS survivors = ", nrow(ADS_surviving_pop)))
   } else {
     final_survivors <- rbind(ADS_encounter_pop,
                              transect_encounter_pop[[length(transect_encounter_pop)]])
-    print(paste0("ADS encounter pop = ", nrow(ADS_encounter_pop)))
+    # print(paste0("ADS encounter pop = ", nrow(ADS_encounter_pop)))
   }
   # Delete duplicates from the final survivor dataframe
   final_survivors <- final_survivors[!duplicated(final_survivors$ID),]
@@ -494,7 +527,7 @@ erad_timing_fun <- function(day,
 # quarter <- 3
 # growing_pop <- init_pop_fun(N, size_dist, size_class_limits)
 # transect_pop <- slice_sample(growing_pop, prop = erad_coverage$visual)
-# ADS_overlap_w_transect <- 0.5
+# ADS_overlap_w_transect <- 0
 # total_ADS_prop <- nrow(growing_pop)*erad_coverage$ADS
 # non_transect_ADS <- total_ADS_prop - nrow(slice_sample(transect_pop, prop = ADS_overlap_w_transect))
 # ADS_pop <- rbind(slice_sample(growing_pop, n = non_transect_ADS),
@@ -502,11 +535,11 @@ erad_timing_fun <- function(day,
 # 
 # x <- erad_timing_fun(day = day,
 #                      quarter = quarter,
-#                      erad_method = erad_methods[1],
+#                      erad_method = erad_methods[1:2],
 #                      pop = growing_pop,
-#                      ADS_IDs = ADS_pop$ID,
-#                      transect_IDs = transect_pop$ID)
-# 
+#                      ADS_IDs = ADS_pop_IDs,
+#                      transect_IDs = transect_pop_IDs)
+# # 
 # 
 # remove(day)
 # remove(growing_pop)
@@ -540,19 +573,34 @@ daily_operations <- function(first_day_pop,
     # Proportion vulnerable to transects
     transect_pop_IDs <- sample(daily_pop[[1]]$ID, 
                                nrow(daily_pop[[1]])*erad_coverage$visual)
+    if(ADS_overlap_w_transect == 1) { # if transects are completed covered by ADS
+    # Proportion vulnerable to ADS
+    ADS_pop_IDs <- sample(daily_pop[[1]]$ID,
+                          nrow(daily_pop[[1]])*erad_coverage$ADS)
+    
+    } else if(ADS_overlap_w_transect < 1 & ADS_overlap_w_transect > 0) { # if there is some ADS coverage of transects
     # Total proportion subject to ADS & how much of that overlaps with the transects
     overlap_pop_IDs <- sample(transect_pop_IDs, length(transect_pop_IDs)*ADS_overlap_w_transect)
     total_num_ADS <- nrow(daily_pop[[1]])*erad_coverage$ADS
     non_transect_ADS <- total_num_ADS - length(overlap_pop_IDs)
+    # Proportion vulnerable to ADS
     ADS_pop_IDs <- c(sample(daily_pop[[1]]$ID[!daily_pop[[1]]$ID %in% transect_pop_IDs], non_transect_ADS),
                      overlap_pop_IDs)
+    # print(paste0("ADS pop ID day 1 = ", length(ADS_pop_IDs)))
+    } else if (ADS_overlap_w_transect == 0) { # if there is no overlap between transects & ADS
+      #print(paste("transect", length(transect_pop_IDs)))
+      # Proportion vulnerable to ADS
+      ADS_pop_IDs <- sample(daily_pop[[1]]$ID[!daily_pop[[1]]$ID %in% transect_pop_IDs],
+                            nrow(daily_pop[[1]])*erad_coverage$ADS)
+    }
     # Distinguishing the population that won't encounter any eradication method
     no_encounter_pop_IDs <- daily_pop[[1]]$ID[!daily_pop[[1]]$ID %in% unique(c(transect_pop_IDs, ADS_pop_IDs))]
-    print(paste0("ADS pop ID day 1 = ", length(ADS_pop_IDs)))
+    # print(paste("no_encounter", length(no_encounter_pop_IDs)))
   }
   # Loop for each day in 90 days
   for(day in 1:(total_days-1)) {
     #  All snakes are exposed to natural mortality
+    # print(paste0("daily pop: ", nrow(daily_pop[[day]])))
     pop <- daily_pop[[day]]
     surviving_pop <- daily_mortality_fun(pop, size_class_limits)
     # Excluding reproductive females to create population who has the potential to grow in this quarter
@@ -565,25 +613,26 @@ daily_operations <- function(first_day_pop,
       growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
                                                        p_g)
     }
+    #print(paste0(day, "before erad"))
     ## If eradication occurs in this day & quarter
     if(erad == "on") {
       if(quarter %in% unique(unlist(erad_quarters)) & day %in% unique(unlist(erad_days))) {
         # Figure out which eradication methods occur on this day in this quarter
         quarter_methods <- vector()
         day_methods <- vector()
-        for(method in 1:length(methods)) {
+        for(method in methods) {
           if(quarter %in% erad_quarters[[method]]) {
-            quarter_methods <- c(quarter_methods, names(erad_quarters)[[method]])
+            quarter_methods <- c(quarter_methods, method)
           }
           if(day %in% erad_days[[method]]) {
-            day_methods <- c(day_methods, names(erad_days)[[method]])
+            day_methods <- c(day_methods, method)
           }
         }
         today_methods <- intersect(quarter_methods, day_methods)
       } else {
         today_methods <- vector()
       }
-      print(today_methods)
+      # print(today_methods)
       if(length(today_methods) > 0) {
         # If any snakes died today of natural causes, remove from the ID lists
         if(nrow(daily_pop[[1]]) > nrow(surviving_pop)) {
@@ -601,9 +650,11 @@ daily_operations <- function(first_day_pop,
             no_encounter_pop_IDs <- no_encounter_pop_IDs[-no_encounter_remove]
           }
         }
-        print(paste0("Day ", day))
-        print(paste0("transect_pop_IDs after natural mort = ", length(transect_pop_IDs)))
-        print(paste0("ADS_pop_IDs after natural mort = ", length(ADS_pop_IDs)))
+        # print(paste0("Day ", day))
+        # print(paste0("transect_pop_IDs after natural mort = ", length(transect_pop_IDs)))
+        # print(paste0("ADS_pop_IDs after natural mort = ", length(ADS_pop_IDs)))
+
+        if(length(transect_pop_IDs) > 0 & length(ADS_pop_IDs) > 0) {
         # With updated ID lists, perform all eradications occurring on this day 
         erad_results[[day]] <- erad_timing_fun(day = day, 
                                                quarter = quarter, 
@@ -611,41 +662,101 @@ daily_operations <- function(first_day_pop,
                                                pop = growing_pop,
                                                ADS_IDs = ADS_pop_IDs,
                                                transect_IDs = transect_pop_IDs)
-        print(paste0("ADS pop IDs before reconcile = ", length(ADS_pop_IDs)))
+        # print(paste0("ADS pop IDs before reconcile = ", length(ADS_pop_IDs)))
         # Update eradication population ID lists
         if(length(erad_results[[day]]$all_dead_IDs) > 0) {
           ADS_remove_2 <- which(ADS_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
           transect_remove_2 <- which(transect_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
+          #print(paste0("transect removals = ", length(transect_remove_2)))
           if(length(ADS_remove_2) > 0) {
             ADS_pop_IDs <- ADS_pop_IDs[-ADS_remove_2]
           }
           if(length(transect_remove_2) > 0) {
-          #print(erad_results[[day]]$all_dead_IDs)
+          # print(erad_results[[day]]$all_dead_IDs)
             transect_pop_IDs <- transect_pop_IDs[-transect_remove_2]
           }
         }
-        print(paste0("transect_pop_IDs after erad = ", length(transect_pop_IDs)))
-        print(paste0("ADS_pop_IDs after erad = ", length(ADS_pop_IDs)))
+        # print(paste0("transect_pop_IDs after erad = ", length(transect_pop_IDs)))
+        # print(paste0("ADS_pop_IDs after erad = ", length(ADS_pop_IDs)))
         # Surviving snakes are combined with surviving reproducers to populate the next day
         daily_pop[[day + 1]] <- rbind(erad_results[[day]]$surviving_snakes, surviving_moms,
                                       growing_pop[growing_pop$ID %in% no_encounter_pop_IDs, ])
-        #print(paste0("No encounter = ",nrow(growing_pop[growing_pop$ID %in% no_encounter_pop_IDs, ])))
-        print(paste0("Survivors = ", nrow(erad_results[[day]]$surviving_snakes)))
+        # print(paste0("No encounter = ",nrow(growing_pop[growing_pop$ID %in% no_encounter_pop_IDs, ])))
+        # print(paste0("Survivors = ", nrow(erad_results[[day]]$surviving_snakes)))
+      } else if(length(transect_pop_IDs) > 0 & length(ADS_pop_IDs) == 0) {
+        erad_results[[day]] <- erad_timing_fun(day = day, 
+                                               quarter = quarter, 
+                                               erad_method = today_methods, 
+                                               pop = growing_pop,
+                                               ADS_IDs = ADS_pop_IDs,
+                                               transect_IDs = transect_pop_IDs)
+        if(length(erad_results[[day]]$all_dead_IDs) > 0) {
+          transect_remove_2 <- which(transect_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
+          # print(paste0("transect removals = ", length(transect_remove_2)))
+          if(length(transect_remove_2) > 0) {
+            # print(erad_results[[day]]$all_dead_IDs)
+            transect_pop_IDs <- transect_pop_IDs[-transect_remove_2]
+          }
+        }
+        # Surviving snakes are combined with surviving reproducers to populate the next day
+        daily_pop[[day + 1]] <- rbind(erad_results[[day]]$surviving_snakes, surviving_moms,
+                                      growing_pop[growing_pop$ID %in% no_encounter_pop_IDs, ])
+        # print("daily_pop nrow", nrow(daily_pop[[day+1]]))
+      } else if(length(transect_pop_IDs) == 0 & length(ADS_pop_IDs) > 0) {
+        erad_results[[day]] <- erad_timing_fun(day = day, 
+                                               quarter = quarter, 
+                                               erad_method = today_methods, 
+                                               pop = growing_pop,
+                                               ADS_IDs = ADS_pop_IDs,
+                                               transect_IDs = transect_pop_IDs)
+        # Update ADS IDs list
+        if(length(erad_results[[day]]$all_dead_IDs) > 0) {
+          ADS_remove_2 <- which(ADS_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
+          if(length(ADS_remove_2) > 0) {
+            ADS_pop_IDs <- ADS_pop_IDs[-ADS_remove_2]
+          }
+        }
+        # Surviving snakes are combined with surviving reproducers to populate the next day
+        daily_pop[[day + 1]] <- rbind(erad_results[[day]]$surviving_snakes, surviving_moms,
+                                      growing_pop[growing_pop$ID %in% no_encounter_pop_IDs, ])
       } else {
+        daily_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
+      }
+        }  else {
         daily_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
       }
     } else {
       daily_pop[[day + 1]] <- rbind(growing_pop, surviving_moms)
     }
-    print(paste0("Daily pop = ", nrow(daily_pop[[day+1]])))
+    # print(paste0("Daily pop = ", nrow(daily_pop[[day+1]])))
+    if(nrow(rbind(growing_pop, surviving_moms)) == 0) {
+      print("No more snakes")
+      break
+    }
   }
-  names(daily_pop) <- paste0("day_", c(1:total_days))
+  names(daily_pop) <- paste0("day_", c(1:length(daily_pop)))
   if(length(erad_results) > 0) {
     names(erad_results) <- paste0("day_", c(1:length(erad_results)))
   }
   
+  ## Extracting the population from the day before any eradication occurs and after all eradication is done
+  if(erad == "on") {
+    observed_quarter_methods <- names(which(sapply(erad_quarters[c(2:3)], function(x) quarter %in% x)))
+    if(length(observed_quarter_methods) > 0) { 
+      day_before_erad <- min(unlist(erad_days[observed_quarter_methods])) - 1
+      day_after_erad <- max(unlist(erad_days[observed_quarter_methods])) + 1
+      day_before_erad_pop <- daily_pop[[day_before_erad]]
+      day_after_erad_pop <- daily_pop[[day_after_erad]]
+    } else {
+      day_before_erad_pop <- NA
+      day_after_erad_pop <- NA
+    }
+  }
+  
   return(list(daily_timeseries = daily_pop,
-              all_erad_results = erad_results))
+              all_erad_results = erad_results,
+              day_before_erad_pop = day_before_erad_pop,
+              day_after_erad_pop = day_after_erad_pop))
 }
 
 # # Test
@@ -659,8 +770,8 @@ daily_operations <- function(first_day_pop,
 #                       total_days,
 #                       erad_methods,
 #                       erad = "on",
-#                       quarter = 3,
-#                       ADS_overlap_w_transect = 0.5)
+#                       quarter = 1,
+#                       ADS_overlap_w_transect = 1)
 # remove(first_day_pop)
 # remove(moms)
 # remove(z)
@@ -668,19 +779,27 @@ daily_operations <- function(first_day_pop,
 
 # Reformatting eradication results
 erad_results_format <- function(erad_results) {
+  # Extracting dataframes from list that have removals
   erad_melt <- erad_results[unlist(lapply(erad_results, length) != 0)]
-  quarter_unobserved <- as.data.frame(matrix(nrow = 0, ncol = 9))
+  # Setting up dataframes to hold unobserved & observed dead snakes, as well as the eradication effort put in
+  quarter_unobserved <- as.data.frame(matrix(nrow = 0, ncol = 8))
   colnames(quarter_unobserved) <- c("ID", "SVL", "sex", "repro_prob", "growth_quant",
                                     "day", "quarter", "L1") 
-  quarter_observed <- as.data.frame(matrix(nrow = 0, ncol = 9))
+  quarter_observed <- as.data.frame(matrix(nrow = 0, ncol = 8))
   colnames(quarter_observed) <- c("ID", "SVL", "sex", "repro_prob", "growth_quant",
                                     "day", "quarter", "L1") 
   quarter_effort <- as.data.frame(matrix(nrow = 0, ncol = 4))
   colnames(quarter_effort) <- c("effort", "day", "quarter", "L1")
   for(day in 1:length(erad_melt)){
+    # print(paste0("day ", day))
+    # print(paste0("unobserved dead ", length(erad_melt[[day]]$unobserved_dead_snakes)))
+    # print(paste0("observed dead ", length(erad_melt[[day]]$observed_dead_snakes)))
     # Melting unobserved (dead) snakes into one dataframe
     if (length(erad_melt[[day]]$unobserved_dead_snakes) > 0) {
       # colnames(quarter_unobserved) <- c(colnames(erad_melt[[day]]$unobserved_dead_snakes[[1]]), "L1")
+      x <- melt(erad_melt[[day]]$unobserved_dead_snakes, 
+                id.vars = colnames(erad_melt[[day]]$unobserved_dead_snakes[[1]]))
+      # print(str(x))
       quarter_unobserved <- rbind(quarter_unobserved, 
                                   melt(erad_melt[[day]]$unobserved_dead_snakes, 
                                        id.vars = colnames(erad_melt[[day]]$unobserved_dead_snakes[[1]])))
@@ -689,7 +808,10 @@ erad_results_format <- function(erad_results) {
     }
     # Melting observed snakes into one dataframe
     if (length(erad_melt[[day]]$observed_snakes) > 0) {
-      colnames(quarter_observed) <- c(colnames(erad_melt[[day]]$observed_snakes[[1]]), "L1")
+      #colnames(quarter_observed) <- c(colnames(erad_melt[[day]]$observed_snakes[[1]]), "L1")
+      x2 <- melt(erad_melt[[day]]$observed_snakes, 
+                id.vars = colnames(erad_melt[[day]]$observed_snakes[[1]]))
+      # print(str(x2))
       quarter_observed <- rbind(quarter_observed, 
                                   melt(erad_melt[[day]]$observed_snakes, 
                                        id.vars = colnames(erad_melt[[day]]$observed_snakes[[1]])))
@@ -698,7 +820,7 @@ erad_results_format <- function(erad_results) {
     }
     # Melting effort into one dataframe
     if (length(erad_melt[[day]]$all_effort) > 0) {
-      colnames(quarter_effort) <- c(colnames(erad_melt[[day]]$all_effort[[1]]), "L1")
+      #colnames(quarter_effort) <- c(colnames(erad_melt[[day]]$all_effort[[1]]), "L1")
       quarter_effort <- rbind(quarter_effort, 
                                 melt(erad_melt[[day]]$all_effort, 
                                      id.vars = colnames(erad_melt[[day]]$all_effort[[1]])))
@@ -715,9 +837,9 @@ erad_results_format <- function(erad_results) {
               effort = quarter_effort))
 }
 
-## Test
+# # Test
 # y <- erad_results_format(z$all_erad_results)
-#
+# 
 # remove(y)
 
 
@@ -758,6 +880,10 @@ quarter_operations <- function(initial_N,
   observed_snakes <- list()
   unobserved_dead_snakes <- list()
   
+  # Empty lists to save the pop from the day before and after all eradications in each quarter
+  quarter_pops_before_erad <- list()
+  quarter_pops_after_erad <- list()
+  
   # Setting up the initial population in the first time step
   quarter_timeseries_pop[[1]] <- init_pop_fun(init_N = initial_N,
                                               init_size_dist = initial_size_dist,
@@ -792,20 +918,22 @@ quarter_operations <- function(initial_N,
         moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
                                   density_prob = r_density_prob)
     }
+    # print(paste0("moms ", nrow(moms)))
     # If there are females reproducing this quarter, then create offspring (if not, don't)
     if(nrow(moms) > 0) {
       # Producing new offspring to join population at the end of the quarter
       offspring <- gen_offspring_fun(mom_pop = moms,
                                      time_step = quarter,
                                      offspring_lambda = lambda)
+      # print(str(offspring))
       # Keeping track of which females reproduced in which quarters (next step will be to use     this to exclude females who've reproduced in the last 2 quarters)
       repro_females_timeseries[[quarter]] <- moms
     } else { # Create empty dataframes with the right column names for offspring and reproducing females lists if no reproducing females in this quarter
       offspring <- quarter_timeseries_pop[[1]][0,]
       repro_females_timeseries[[quarter]] <- quarter_timeseries_pop[[1]][0,]
     }
-    print(paste0("Offspring = ", nrow(offspring)))
-    print(paste0("Moms = ", nrow(repro_females_timeseries[[quarter]])))
+    # print(paste0("Offspring = ", nrow(offspring)))
+    # print(paste0("Moms = ", nrow(repro_females_timeseries[[quarter]])))
     # Running daily operations - natural mortality and individual growth
     daily_results <- daily_operations(first_day_pop = quarter_timeseries_pop[[quarter]],
                                       p_g = p_g,
@@ -816,6 +944,7 @@ quarter_operations <- function(initial_N,
                                       quarter = quarter,
                                       ADS_overlap_w_transect = ADS_overlap_on_transect)
     daily_timeseries_pop <- daily_results$daily_timeseries
+    # print(str(daily_timeseries_pop[[total_days]]))
     if(length(daily_results$all_erad_results) > 0) {
     # Filling the observed, unobserved dead snakes and effort lists:
     erad_reformatted <- erad_results_format(erad_results = daily_results$all_erad_results)
@@ -825,10 +954,14 @@ quarter_operations <- function(initial_N,
     } 
     # Adding offspring and the reproducing females back into the surviving and grown general   population to be the start of the next quarter
     quarter_timeseries_pop[[quarter + 1]] <- rbind(daily_timeseries_pop[[total_days]], offspring)
+    # print(str(quarter_timeseries_pop))
     # Updating sexual maturity status after the quarter's worth of growth
     for(snake in 1:nrow(quarter_timeseries_pop[[quarter + 1]])) {
       quarter_timeseries_pop[[quarter + 1]]$repro_prob[snake] <- maturity_fun(quarter_timeseries_pop[[quarter + 1]]$SVL[snake])
     }
+    # Saving before and after eradication populations
+    quarter_pops_before_erad[[quarter]] <- daily_results$day_before_erad_pop
+    quarter_pops_after_erad[[quarter]] <- daily_results$day_after_erad_pop
     toc()
   }
   # Formating quarter results for plotting
@@ -843,11 +976,13 @@ quarter_operations <- function(initial_N,
               all_quarters = all_quarters,
               all_observed = observed_snakes,
               all_unobserved = unobserved_dead_snakes,
-              all_effort = effort_record))
+              all_effort = effort_record,
+              all_quarters_before_after_erad = list(pop_before_erad = quarter_pops_before_erad,
+                                                    pop_after_erad = quarter_pops_after_erad)))
 }  
 
 # # Test
-# test_total_quarters <- 5
+# test_total_quarters <- 3
 # test_N <- 1000
 # test_size_dist <- c(0.5, 0.1, 0.2, 0.2)
 # p_g <- 0.75
@@ -856,10 +991,10 @@ quarter_operations <- function(initial_N,
 #                         p_g = p_g,
 #                         lambda = lambda,
 #                         total_quarters =  test_total_quarters,
-#                         total_days = total_days,
+#                         total_days = 91,
 #                         erad = "on",
 #                         erad_method = erad_methods)
-# remove(test_total_quarter)
+# remove(test_total_quarters)
 # remove(test_N)
 # remove(test_size_dist)
 # remove(p_g)
