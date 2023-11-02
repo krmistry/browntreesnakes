@@ -38,29 +38,35 @@ source(here("Scripts/02_results_functions.R"))
 
 #### Alternative 1
 
--   6 consequetive weeks of trapping per transect, with 12-13 neighboring transects being trapped at a time
+-   6 consequtive weeks of trapping per transect, with 28-29 neighboring transects being trapped per quarter
     -   Also based on HMU experimental design
-    -   13 transects in the first 5 quarters (11.5% of the area), and 12 in the last 4 quarters (10.6%)
+    -   28 transects in the first 3 quarters (24.8% of the area), and 29 in the last quarter (25.7%)
     -   Trap in weeks 3 - 9
 -   ADS needs to occur outside of trapping & visual survey weeks - it can occur in the 11th, 12th or 1st weeks of the quarter
     -   Target area coverage for ADS can vary, from 0 - 100% for alternative management choices in this scenario
     -   Target ADS bait density = 120 cartridges/ha/day, using an automatic release system that drops 1 cartridge/9 m. The flight path will be 9 m apart, in a back and forth pattern to provide full coverage of an area.
         -   Based on Goetz et al. 2021, which used the maximum rate of release allowed by the EPA. They didn't cite why they chose 9 m apart for the flight path, but it seems likely that is based on past research (i.e. the automatic release system drops 1 cartridge per 9 m, presumably based on past research about attractiveness/effectiveness of the bait) - it would be good to check though, to see if I can get a better reference for this choice.
--   Visual survey on 2nd and 10th weeks of quarter (before and after trapping)
+-   Visual survey on 2nd and 10th weeks of quarter (before and after trapping), on the same transects being trapped in that quarter
     -   Visual surveys could also occur during the trapping weeks, that could be an alternatives choice (probably based on cost)
+    -   1 team can cover \~4 transects per night (based on Nafus et al. 2021), so to cover 28 transects in 1 week, these are some combinations:
+        -   1 team can cover all transects once in a week
+        -   More teams could cover the area more than once, but that would require different numbers of people per night, so for now I'll just stick with 1 team
 
-```{r alternative_1}
+```{r alternative_1_set_up}
+
+# Number of teams for visual survey
+teams <- 1
 
 # Adjusting effort hours per method if necessary (there are defaults)
 effort_erad_methods <- list()
 effort_erad_methods$ADS <- 4
-effort_erad_methods$visual <- 4*2
+effort_erad_methods$visual <- 4*2*teams
 effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
 effort_erad_methods$bait_tube <- 12 # Same as trap
 
 # Parameters that may be changed or subject to sensitivity analysis or to simulate over
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 10 # increase to 50 for real runs, this is just to get everything working quicker
+area_size <- 50 # increase to 50 for real runs, this is just to get everything working quicker
 
 # Set carrying capacity for this population:
 K <- 119*area_size
@@ -79,12 +85,12 @@ day_time_step <- 91
 
 # Quarters where eradication methods are used, and which days in that quarter:
 erad_quarters <- list()
-erad_quarters$ADS <- c(2, 4)
+erad_quarters$ADS <- c(2, 3)
 erad_quarters$visual <- c(1:4)
 erad_quarters$trap <- c(1:4)
 erad_quarters$bait_tube <- c(1:4)
 erad_days <- list()
-erad_days$ADS <- c(7*1, 7*12)
+erad_days$ADS <- c(7*1, 7*11, 7*12)
 erad_days$visual <- seq(7*2, (7*11 - 1), 2)
 erad_days$trap <- seq(7*3, (7*10 - 1), 2)
 erad_days$bait_tube <- seq(7*11, 7*12, 3)
@@ -92,9 +98,9 @@ erad_days$bait_tube <- seq(7*11, 7*12, 3)
 # Coverage for each method (totally arbitrary, adjust later)
 erad_coverage <- list()
 erad_coverage$ADS <- 1
-erad_coverage$visual <- 0.11
-erad_coverage$trap <- 0.11
-erad_coverage$bait_tube <- 0.11
+erad_coverage$visual <- 4/113
+erad_coverage$trap <- 28/113
+erad_coverage$bait_tube <- 28/113
 # Overlap of ADS over transects
 ADS_overlap_on_transect <- 1 # i.e. total area coverage, by at least one method 
 
@@ -122,13 +128,16 @@ To incorporate uncertainty into these results, initial N values will come from 2
 
 ```{r alternative_1_variants}
 
-# Incorporating uncertainty about the starting population by simulating a range of values - starting with 25 to see how long it takes to run
-N_list <- round(rnorm(25, 100, 10))*area_size
+# Incorporating uncertainty about the starting population by simulating a range of values - 50 iterations for presentation results
+N_list <- round(rnorm(50, 100, 10))*area_size
+
+# Number of variants for looping
+num_variants <- length(N_list)
 
 # List of quarter results
 erad_results_list <- list()
 
-for(variant in 1:length(N_list)) {
+for(variant in 1:num_variants) {
   # Running model 
   erad_results_list[[variant]] <- quarter_operations(initial_N = N_list[variant], 
                                            initial_size_dist = size_dist, 
@@ -142,11 +151,11 @@ for(variant in 1:length(N_list)) {
 }
 
 # Save outputs 
-saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_25.RDS"))
+saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
 
 
 erad_plot_data <- list()
-for(variant in 1:length(erad_results_list)) {
+for(variant in 1:num_variants) {
   erad_plot_data[[variant]] <- list()
   results <- erad_results_list[[variant]]$all_quarters
   for(quarter in 1:erad_quarter_time_step) {
@@ -159,19 +168,20 @@ for(variant in 1:length(erad_results_list)) {
   }
   names(erad_plot_data[[variant]]) <- paste0("Quarter_", c(1:4))
 }
-names(erad_plot_data) <- paste0("variant_", c(1:25))  
+names(erad_plot_data) <- paste0("variant_", c(1:num_variants))  
 
 erad_plot_data_melted <- melt(erad_plot_data, id.vars = colnames(erad_plot_data[[1]][[1]]))
 colnames(erad_plot_data_melted)[c(3:4)] <- c("Quarter", "variant")
 erad_plot_data_melted$size_category <- factor(erad_plot_data_melted$size_category, levels = size_class_names)
-erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:25)))
+erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:num_variants)))
 
 variants_plot <- ggplot(erad_plot_data_melted, aes(x = Quarter, y = N, color = variant)) +
-  geom_path(aes(group = variant)) +
-  geom_point() +
+  geom_path(aes(group = variant), show.legend = FALSE) +
+  geom_point(show.legend = FALSE) +
   #geom_hline(yintercept = K) +
   facet_wrap(vars(size_category), scales = "free") +
   theme_bw() 
+  
   # scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 
 ```
@@ -632,9 +642,238 @@ for(variant in 1:length(jags_outputs_15_list)) {
 
 #### Alternative 2 - management rule (ADS then visual survey only)
 
-In the second eradication scenario alternative, ADS will occur across the entire area, with visual survey occurring at regular intervals to enable population monitoring to occur. When the population is estimated to be at a certain threshold (\<1% of population in medium, large and x-large size classes)
+In the second eradication scenario alternative, ADS will occur across the entire area, with visual survey occurring at regular intervals to enable population monitoring to occur. When the population is estimated to be at a certain threshold (\<1% of population in medium, large and x-large size classes), it will switch to visual survey only
+
+There will be 2 ADS rounds of 3 drops (spaced a week apart) in each quarter, with 3 weeks between them. Visual surveys will occur at the end of the quarter, and the first quarter will only have visual survey (to establish a beginning estimate of the population). Visual surveys will occur every night for 2 weeks, and can be done in a number of ways, these are my top two options:
+
+-   8 transects per night for 14 nights would cover the whole 113 transects (112, but close enough for now) once in the 2 week period - this requires 2 teams (of 2 people)
+
+-   16 transects per night would allow the whole area to be covered twice in the time period (requires 4 teams)
 
 ```{r alternative_2_set_up}
+
+# Number of teams for visual survey
+teams <- 2
+
+# Adjusting effort hours per method if necessary (there are defaults)
+effort_erad_methods <- list()
+effort_erad_methods$ADS <- 4
+effort_erad_methods$visual <- 4*2*teams
+
+
+# Parameters that may be changed or subject to sensitivity analysis or to simulate over
+# Set study/eradication area size, which dictates both K and the initial population
+area_size <- 50 # increase to 50 for real runs, this is just to get everything working quicker
+
+# Set carrying capacity for this population:
+K <- 119*area_size
+
+## For initial population, based on previous runs to find roughly eqiulibrium N and size distribution:
+N <- 100*area_size
+size_dist <- c(0.6, 0.1, 0.1, 0.2)
+
+
+# Growth probability (p_g)
+g_density_prob <- 0.75 
+
+# Number of quarters to generate - 1 year
+erad_quarter_time_step <- 4
+day_time_step <- 91
+
+# Quarters where eradication methods are used, and which days in that quarter:
+erad_quarters <- list()
+erad_quarters$ADS <- c(2:4)
+erad_quarters$visual <- c(1:4)
+erad_days <- list()
+erad_days$ADS <- c(seq(7*2, 7*4, 7), seq(7*7, 7*9, 7))
+erad_days$visual <- c((7*11):(7*13-1))
+
+
+# Coverage for each method (totally arbitrary, adjust later)
+erad_coverage <- list()
+erad_coverage$ADS <- 1
+erad_coverage$visual <- 8/113
+
+# Overlap of ADS over transects
+ADS_overlap_on_transect <- 1 # i.e. total area coverage, by at least one method 
+
+# Running model 
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method = erad_methods)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+
+
+```
+
+```{r alternative_2_variants}
+
+# Incorporating uncertainty about the starting population by simulating a range of values - starting with 25 to see how long it takes to run
+N_list <- round(rnorm(25, 100, 10))*area_size
+
+# List of quarter results
+erad_results_list <- list()
+
+for(variant in 1:length(N_list)) {
+  # Running model 
+  erad_results_list[[variant]] <- quarter_operations(initial_N = N_list[variant], 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method = erad_methods[c(1:2)])
+  print(paste0("iteration ", variant, " is complete"))
+}
+
+# Save outputs 
+saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_alt_2_25.RDS"))
+
+
+erad_plot_data <- list()
+for(variant in 1:length(erad_results_list)) {
+  erad_plot_data[[variant]] <- list()
+  results <- erad_results_list[[variant]]$all_quarters
+  for(quarter in 1:erad_quarter_time_step) {
+    erad_plot_data[[variant]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+    colnames(erad_plot_data[[variant]][[quarter]]) <- c("size_category", "N")
+    for(size in 1:length(size_class_names)) {
+      erad_plot_data[[variant]][[quarter]][size, 1] <- size_class_names[size]
+      erad_plot_data[[variant]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
+    }
+  }
+  names(erad_plot_data[[variant]]) <- paste0("Quarter_", c(1:4))
+}
+names(erad_plot_data) <- paste0("variant_", c(1:25))  
+
+erad_plot_data_melted <- melt(erad_plot_data, id.vars = colnames(erad_plot_data[[1]][[1]]))
+colnames(erad_plot_data_melted)[c(3:4)] <- c("Quarter", "variant")
+erad_plot_data_melted$size_category <- factor(erad_plot_data_melted$size_category, levels = size_class_names)
+erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:25)))
+
+variants_plot <- ggplot(erad_plot_data_melted, aes(x = Quarter, y = N, color = variant)) +
+  geom_path(aes(group = variant)) +
+  geom_point() +
+  #geom_hline(yintercept = K) +
+  facet_wrap(vars(size_category), scales = "free") +
+  theme_bw() 
+  # scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+
+
+```
+
+```{r model_metrics_fun}
+
+
+
+## Function to calculate the number as well as proportion of total population in each size class at the end of the timeseries
+model_metric_1_fun <- function(input_list,
+                               type_of_input = c("simulated", "estimated"),
+                               threshold = c(prop = 0.01, N = 10)) {
+  # Number of iterations for loops
+  iterations <- length(input_list)
+  # Isolating N values based on what type of input 
+  last_Ns <- list()
+  if(type_of_input == "estimated") {
+    for(variant in 1:iterations) {
+      last_Ns[[variant]] <- vector()
+      for(k in 1:S) {
+        last_Ns[[variant]][k] <- input_list[[variant]]$mean$N[k,I[Q],Q]
+      }
+    }
+  } else if(type_of_input == "simulated") {
+    for(variant in 1:iterations) {
+      last_Ns[[variant]] <- list()
+      results <- erad_results_list[[variant]]$quarter_timeseries[[erad_quarter_time_step+1]]
+      for(snake in 1:nrow(results)) {
+        results$size_class[snake] <- size_class_fun(results$SVL[snake])
+      }
+      for(k in 1:length(size_class_names)) {
+        last_Ns[[variant]][k] <- nrow(results[results$size_class == size_class_names[k],])
+      }
+      last_Ns[[variant]] <- unlist(last_Ns[[variant]])
+    }
+  }
+  
+  N_k <- list()
+  prop_N_k <- list()
+  for(variant in 1:iterations) {
+    N_k[[variant]] <- vector()
+    for(k in 1:length(size_class_names)) {
+      N_k[[variant]][k] <- last_Ns[[variant]][k]
+    }
+    prop_N_k[[variant]] <- N_k[[variant]]/sum(last_Ns[[variant]])
+  }
+  # Calculate the number of runs that meets the threshold, based on the type of threshold
+    prop_under <- c("medium" = 0, "large" = 0, "xlarge" = 0)
+    N_under <- c("medium" = 0, "large" = 0, "xlarge" = 0)
+    for(variant in 1:iterations) {
+      for(k in 2:length(size_class_names)) {
+          if(prop_N_k[[variant]][k] < threshold[1]) {
+            prop_under[k-1] <- prop_under[k-1] + 1
+          } else {
+            prop_under[k-1] <- prop_under[k-1]
+          }
+          if(N_k[[variant]][k] < threshold[2]) {
+            N_under[k-1] <- N_under[k-1] + 1
+          } else {
+            N_under[k-1] <- N_under[k-1]
+          }
+      }
+    }
+
+  # Proportion of runs under the threshold:
+  prop_under <- prop_under/iterations
+  N_under <- N_under/iterations
+  
+  # Whether all upper size classes meet the same threshold
+  all_prop_under <- 0
+  all_N_under <- 0
+  for(variant in 1:iterations) {
+    if(prop_N_k[[variant]][2] < threshold[1] &
+       prop_N_k[[variant]][3] < threshold[1] &
+       prop_N_k[[variant]][4] < threshold[1]) {
+      all_prop_under <- all_prop_under + 1
+    } else {
+      all_prop_under <- all_prop_under
+    }
+    
+    if(N_k[[variant]][2] < threshold[2] & 
+       N_k[[variant]][3] < threshold[2] & 
+       N_k[[variant]][4] < threshold[2]) {
+      all_N_under <- all_N_under + 1
+    } else {
+      all_N_under <- all_N_under
+    }
+  }
+  all_prop_under <- all_prop_under/iterations
+  all_N_under <- all_N_under/iterations
+  
+  return(list(last_N_k = N_k,
+              last_prop_k = prop_N_k,
+              any_prop_under_threshold = list("prop" = prop_under,
+                                           "N" = N_under),
+              all_under_threshold = c("prop" = all_prop_under,
+                                      "N" = all_N_under)))
+}
+
+
+x <- model_metric_1_fun(erad_results_list, "simulated")
+                        
+
 
 
 ```
