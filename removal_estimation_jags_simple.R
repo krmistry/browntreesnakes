@@ -5,6 +5,8 @@ library(ggplot2)
 library(dplyr)
 library(tictoc)
 library(fdrtool)
+library(vctrs)
+library(scales)
 
 ## Loading objects and functions
 source(here("Scripts/00_user_inputs.R"))
@@ -16,8 +18,10 @@ source(here("Scripts/02_results_functions.R"))
 # I is quarter-dependent
 # saveRDS(erad_quarter_results, file = "consist_test_erad_quarter_results.rds")
 # consist_erad_quarter_results <- readRDS("consist_test_erad_quarter_results.rds")
-# Isolating methods used in this version:
+
+# Isolating methods used in this version & the quarters:
 obs_methods <- erad_methods[c(2:3)]
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
 
 # Using only visual data
 erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_quarter_results,
@@ -29,9 +33,10 @@ erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_quarter_resul
 ##### Reformatting to merge I and J into one dimension, with odds being visual and evens being trap
 
 # Values needed for array dimensions & loops
-S <- 4 # number of size classes -- CHANGE THIS PARAMATER NAME - CAN'T BE THE SAME AS DD PARAMETER!!!!
-I <- rep(length(erad_days[[obs_methods[1]]])*2, 4) # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
-Q <- 4 # Primary sampling periods (quarters)
+S <- 4 # number of size classes 
+Q <- length(unique(unlist(erad_quarters[obs_methods]))) # Primary sampling periods (quarters)
+I <- rep(max(length(erad_days[[obs_methods[1]]]), length(erad_days[[obs_methods[2]]]))*2, Q) # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
+
 
 removals_array_v2 <- array(dim = c(S, I[1], Q))
 effort_array_v2 <- array(dim = c(I[1], Q))
@@ -51,7 +56,7 @@ for(t in 1:(Q-1)) {
 }
 
 
-# JAGS Removal Estimation Model - version 2
+# JAGS Removal Estimation Model - simple growth version 
 sink("removal_model_simple.jags")
 cat("
 model {
@@ -206,13 +211,13 @@ data <- list(Y = removals_array_v2,
              trap_days = trap_days)
 
 # Parameters monitored
-parameters <- c("N", "N.sum", "alpha.p", "beta.p", "r1", "r2", "r3", "r4", 
-                "p",  "R", "D")
+parameters <- c("N", "r1", "r2", "r3", "r4", 
+                "p")
 
 # MCMC settings
-ni <- 20000
 nt <- 1
-nb <- 10000
+nb <- 50000
+ni <- 100000 + nb
 nc <- 3
 
 # Call JAGS Function
@@ -225,7 +230,7 @@ output_jags <- jags(data,
                     n.iter = ni,
                     n.burnin = nb)
 
-##### Testing model consistency with the same input results - run 50 times
+##### Testing model consistency with the same input results - run 50 times 
 consist_test_output_jags <- list()
 for(iter in 1:50) {
   output_jags_temp <- jags(data, 
@@ -241,51 +246,68 @@ for(iter in 1:50) {
 }
 
 ## Saving and restoring the 50 run consistency check data
-# saveRDS(consist_test_output_jags, file = "consistency_test_outputs_8.16.23.rds")
+saveRDS(consist_test_output_jags, file = "consistency_test_outputs_simple_12.5.23.rds")
 # consist_test_output_jags <- readRDS("consistency_test_outputs_8.16.23.rds")
 
 mean_outputs <- list()
-mean_outputs$N_sum <- as.data.frame(matrix(NA, nrow = 50, ncol = 3))
-colnames(mean_outputs$N_sum) <- paste0("Quarter_", c(1:3))
+mean_outputs$N_sum <- as.data.frame(matrix(NA, nrow = 50, ncol = length(obs_quarters)))
+colnames(mean_outputs$N_sum) <- paste0("Quarter_", obs_quarters)
 mean_outputs$p_vis <- as.data.frame(matrix(NA, nrow = 50, ncol = 4))
 colnames(mean_outputs$p_vis) <- size_class_names
 mean_outputs$p_trap <- as.data.frame(matrix(NA, nrow = 50, ncol = 4))
 colnames(mean_outputs$p_trap) <- size_class_names
 for(iter in 1:50) {
   # Separating out encounter probability for visual survey vs trapping; since effort is the same throughout, the encounter probability for each size class is the same through time
-  mean_outputs$p_vis[iter, ] <- consist_test_output_jags[[iter]]$p[,1,1]
-  mean_outputs$p_trap[iter, ] <- consist_test_output_jags[[iter]]$p[,16,2]
-  for(t in 1:(Q-1)) {
+  mean_outputs$p_vis[iter, ] <- consist_test_output_jags[[iter]]$p[,1,1] 
+  mean_outputs$p_trap[iter, ] <- consist_test_output_jags[[iter]]$p[,2,2] # depends on trap days
+  for(t in 1:Q) {
     mean_outputs$N_sum[iter, t] <- consist_test_output_jags[[iter]]$N.sum[t] # didn't actually sum all 4 years, just the first 3 (fixed for next set of runs)
   }
 }
 
 par(mfrow = c(1,3))
-hist(mean_outputs$N_sum$Quarter_1)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[2]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_2)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[3]]), col = "red")
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[3]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_3)
-abline(v = nrow(consist_erad_quarter_results$quarter_timeseries[[6]]), col = "red")
-
-par(mfrow = c(2, 2))
-hist(mean_outputs$p_vis$small, xlim = c(0, 0.02))
-abline(v = mortality_prob_erad_methods$visual[1]/100*erad_coverage$visual, col = "red")
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[4]]), col = "red")
+hist(mean_outputs$N_sum$Quarter_4)
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[5]]), col = "red")
+hist(mean_outputs$N_sum$Quarter_5)
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[6]]), col = "red")
+hist(mean_outputs$N_sum$Quarter_6)
+abline(v = nrow(erad_quarter_results$quarter_timeseries[[7]]), col = "red")
+# Visual survey mortality probability, estimated histogram with real value in red
+par(mfrow = c(2, 2)) # limits will likely need to be adjusted to show the real values
+hist(mean_outputs$p_vis$small, xlim = c(0.0015, 0.0025)) 
+abline(v = mortality_prob_erad_methods$visual[1]*erad_coverage$visual, col = "red")
 hist(mean_outputs$p_vis$medium)
-abline(v = mortality_prob_erad_methods$visual[2]/100*erad_coverage$visual, col = "red")
-hist(mean_outputs$p_vis$large)
-abline(v = mortality_prob_erad_methods$visual[3]/100*erad_coverage$visual, col = "red")
-hist(mean_outputs$p_vis$xlarge)
-abline(v = mortality_prob_erad_methods$visual[4]/100*erad_coverage$visual, col = "red")
-
-hist(mean_outputs$p_trap$small)
+abline(v = mortality_prob_erad_methods$visual[2]*erad_coverage$visual, col = "red")
+hist(mean_outputs$p_vis$large, xlim = c(0.0008, 0.0018))
+abline(v = mortality_prob_erad_methods$visual[3]*erad_coverage$visual, col = "red")
+hist(mean_outputs$p_vis$xlarge, xlim = c(0.0014, 0.0028))
+abline(v = mortality_prob_erad_methods$visual[4]*erad_coverage$visual, col = "red")
+# Trap mortality probability, estimated histogram with real value in red
+par(mfrow = c(2, 2)) # limits will likely need to be adjusted to show the real values
+hist(mean_outputs$p_trap$small, xlim = c(0.0008, 0.0013)) 
+abline(v = mortality_prob_erad_methods$trap[1]*erad_coverage$trap, col = "red")
 hist(mean_outputs$p_trap$medium)
-hist(mean_outputs$p_trap$large)
-hist(mean_outputs$p_trap$xlarge)
+abline(v = mortality_prob_erad_methods$trap[2]*erad_coverage$trap, col = "red")
+hist(mean_outputs$p_trap$large, xlim = c(0.0022, 0.0065))
+abline(v = mortality_prob_erad_methods$trap[3]*erad_coverage$trap, col = "red")
+hist(mean_outputs$p_trap$xlarge, xlim = c(0.002, 0.011))
+abline(v = mortality_prob_erad_methods$trap[4]*erad_coverage$trap, col = "red")
+
+
 
 traceplot(output_jags, parameters = "alpha.p")
 traceplot(output_jags, parameters = "beta.p")
-traceplot(output_jags, parameters = c("g1", "g2", "g3", "g4"))
+traceplot(output_jags, parameters = c("r1", "r2", "r3", "r4"))
+traceplot(output_jags, parameters = "p")
+
+# Mean N estimates vs simulated real N
+est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
+                                       erad_quarter_results = erad_quarter_results,
+                                       erad_quarters = erad_quarters)
 
 # Separating out encounter probability by method - odd columns are visual survey, even columns are trap
 p_1 <- output_jags$sims.list$p[,,seq(1, 28, 2),]
@@ -302,7 +324,40 @@ p_2_v2 <- p_2[,,8:14,2:3] # trapping only occurred in quarters 2 & 3, in second 
 # trap: 0.1630739 0.2573346 0.4453922 0.4016056 
 
 
+# Calculating true size class growth rates
+size_class_growth <- as.data.frame(matrix(NA, nrow = 4, ncol = 4))
+colnames(size_class_growth) <- c("size_class", paste0("inter-primary_", c(1:3)))
+size_class_growth$size_class <- size_class_names
+
+observed_quarters <- c(2,3,6,7)
+for(quarter in 1:3) {
+  # Separating out population at the beginning of the inter-primary period (after an eradication primary period)
+  after_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_after_erad[observed_quarters[quarter]][[1]]
+  # Separating out population at the end of the inter-primary period (before the next eradication primary period)
+  before_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_before_erad[observed_quarters[quarter+1]][[1]]
+  # Adding size class column to both of the above data frames
+  for(snake in 1:nrow(after_erad_pop)) {
+    after_erad_pop$size_class[snake] <- size_class_fun(after_erad_pop$SVL[snake])
+  }
+  for(snake in 1:nrow(before_erad_pop)) {
+    before_erad_pop$size_class[snake] <- size_class_fun(before_erad_pop$SVL[snake])
+  }
+  for(size in 1:length(size_class_names)) {
+    size_after_pop <- after_erad_pop[after_erad_pop$size_class == size_class_names[size],]
+    size_before_pop <- before_erad_pop[before_erad_pop$size_class == size_class_names[size],]
+    size_class_growth[size, quarter+1] <- nrow(size_before_pop)/nrow(size_after_pop)
+  }
+}
 
 
+# > size_class_growth
+# size_class inter-primary_1 inter-primary_2 inter-primary_3
+# 1      small       1.0044188       0.9814815       1.0508876
+# 2     medium       0.4240150       0.5806452       1.0708661
+# 3      large       0.4386792       0.5328467       1.0204082
+# 4     xlarge       0.4341232       0.4797297       0.9807692
+
+# Except, r is constant across time steps (it's exponentiated by # days between eradication periods), so
+# this isn't quite right... how do I calculate that? Average it?
 
 
