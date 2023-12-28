@@ -66,7 +66,7 @@ effort_erad_methods$bait_tube <- 12 # Same as trap
 
 # Parameters that may be changed or subject to sensitivity analysis or to simulate over
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 50 # increase to 50 for real runs, this is just to get everything working quicker
+area_size <- 50 
 
 # Set carrying capacity for this population:
 K <- 119*area_size
@@ -92,8 +92,8 @@ erad_quarters$bait_tube <- c(1:4)
 erad_days <- list()
 erad_days$ADS <- c(7*1, 7*11, 7*12)
 erad_days$visual <- seq(7*2, (7*11 - 1), 2)
-erad_days$trap <- seq(7*3, (7*10 - 1), 2)
-erad_days$bait_tube <- seq(7*11, 7*12, 3)
+erad_days$trap <- seq(7*2, (7*11 - 1), 2)
+erad_days$bait_tube <- seq(7*3, (7*10 - 1), 2)
 
 # Coverage for each method (totally arbitrary, adjust later)
 erad_coverage <- list()
@@ -124,12 +124,12 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
 
 ```
 
-To incorporate uncertainty into these results, initial N values will come from 25 draws (increase the number later) from a normal distribution, currently with mean of 100 and SD of 10. I'll then take all of these results, and put them through the estimation model...I guess? What do I want to know about these results first though. Maybe the mean of impact, and some measurement of variance, from the eradication regime? In terms of total N, as well as N for each size class.
+To incorporate uncertainty into these results, initial N values will come from 100 draws from a normal distribution, currently with mean of 100 and SD of 10 (multiplied by the area size). I'll then take all of these results, and put them through the estimation model...I guess? What do I want to know about these results first though. Maybe the mean of impact (like, percentage decreased within the year), and some measurement of variance, from the eradication regime? In terms of total N, as well as N for each size class.
 
 ```{r alternative_1_variants}
 
 # Incorporating uncertainty about the starting population by simulating a range of values - 50 iterations for presentation results
-N_list <- round(rnorm(50, 100, 10))*area_size
+N_list <- round(rnorm(100, 100, 10))*area_size
 
 # Number of variants for looping
 num_variants <- length(N_list)
@@ -150,37 +150,43 @@ for(variant in 1:num_variants) {
   print(paste0("iteration ", variant, " is complete"))
 }
 
+erad_results_list_1 <- erad_results_list
 # Save outputs 
 saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
+erad_results_list_1 <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
 
-
-erad_plot_data <- list()
+erad_plot_data_1 <- list()
 for(variant in 1:num_variants) {
-  erad_plot_data[[variant]] <- list()
-  results <- erad_results_list[[variant]]$all_quarters
+  erad_plot_data_1[[variant]] <- list()
+  results <- erad_results_list_1[[variant]]$all_quarters
   for(quarter in 1:erad_quarter_time_step) {
-    erad_plot_data[[variant]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
-    colnames(erad_plot_data[[variant]][[quarter]]) <- c("size_category", "N")
+    erad_plot_data_1[[variant]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+    colnames(erad_plot_data_1[[variant]][[quarter]]) <- c("size_category", "N")
     for(size in 1:length(size_class_names)) {
-      erad_plot_data[[variant]][[quarter]][size, 1] <- size_class_names[size]
-      erad_plot_data[[variant]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
+      erad_plot_data_1[[variant]][[quarter]][size, 1] <- size_class_names[size]
+      erad_plot_data_1[[variant]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
     }
   }
-  names(erad_plot_data[[variant]]) <- paste0("Quarter_", c(1:4))
+  names(erad_plot_data_1[[variant]]) <- c(1:4)
 }
-names(erad_plot_data) <- paste0("variant_", c(1:num_variants))  
+names(erad_plot_data_1) <- paste0("variant_", c(1:num_variants))  
 
-erad_plot_data_melted <- melt(erad_plot_data, id.vars = colnames(erad_plot_data[[1]][[1]]))
-colnames(erad_plot_data_melted)[c(3:4)] <- c("Quarter", "variant")
-erad_plot_data_melted$size_category <- factor(erad_plot_data_melted$size_category, levels = size_class_names)
-erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:num_variants)))
+erad_plot_data_melted_1 <- melt(erad_plot_data_1, id.vars = colnames(erad_plot_data_1[[1]][[1]]))
+colnames(erad_plot_data_melted_1)[c(3:4)] <- c("Quarter", "variant")
+erad_plot_data_melted_1$size_category <- factor(erad_plot_data_melted_1$size_category, levels = size_class_names)
+# erad_plot_data_melted_1$variant <- factor(erad_plot_data_melted_1$variant, levels = paste0("variant_", c(1:num_variants)))
 
-variants_plot <- ggplot(erad_plot_data_melted, aes(x = Quarter, y = N, color = variant)) +
-  geom_path(aes(group = variant), show.legend = FALSE) +
-  geom_point(show.legend = FALSE) +
+variants_plot_1 <- ggplot(erad_plot_data_melted_1, aes(x = Quarter, y = N, color = variant)) +
+  geom_path(aes(group = variant), show.legend = FALSE, color = "black") +
+  geom_point(show.legend = FALSE, color = "black") +
   #geom_hline(yintercept = K) +
-  facet_wrap(vars(size_category), scales = "free") +
-  theme_bw() 
+  facet_wrap(vars(size_category)) +
+  theme_bw() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks.y = element_blank(),
+  )
   
   # scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 
@@ -188,15 +194,15 @@ variants_plot <- ggplot(erad_plot_data_melted, aes(x = Quarter, y = N, color = v
 
 ```{r jags_model}
 
-# JAGS Removal Estimation Model - version 2
-sink("removal_model.jags")
+# JAGS Removal Estimation Model - simple growth version 
+sink("removal_model_simple.jags")
 cat("
 model {
 
 # Set up first row of N
 for(k in 1:S) {
-  p.miss[1,k,1:N_prior] <- rep(1/N_prior,N_prior)
-  miss[1,k] ~ dcat(p.miss[1,k,1:N_prior])
+  p.miss[1,k,1:1000] <- rep(1/1000,1000)
+  miss[1,k] ~ dcat(p.miss[1,k,1:1000])
   N[k,1,1] <-  N.base[k,1,1] + miss[1,k]
 }
 
@@ -205,86 +211,44 @@ for(k in 1:S) {
 for(k in 1:S) {
   beta.p[k, 1] ~ dunif(0, 10)
   beta.p[k, 2] ~ dunif(0, 10)
-  alpha.p[k, 1] ~ dunif(-20, 10)
-  alpha.p[k, 2] ~ dunif(-20,10)
+  alpha.p[k, 1] ~ dunif(-10, 10)
+  alpha.p[k, 2] ~ dunif(-10,10)
   for(v in vis_days) {
-  beta.p[k, v] <- beta.p[k,1] 
-  alpha.p[k, v] <- alpha.p[k,1]
+    beta.p[k, v] <- beta.p[k,1] 
+    alpha.p[k, v] <- alpha.p[k,1]
   }
   for(r in trap_days) {
-  beta.p[k, r] <- beta.p[k,2]
-  alpha.p[k, r] <- alpha.p[k,2]
+    beta.p[k, r] <- beta.p[k,2]
+    alpha.p[k, r] <- alpha.p[k,2]
   }
 }
 
-## Survival hyperparameter - one set for when ADS has occurred, one for when it hasn't
-# 
-# for(m in 1:2) {
-#   s1.day[m] ~ dbeta(1,1)
-#   s2.day[m] ~ dbeta(1,1)
-#   s3.day[m] ~ dbeta(1,1)
-#   s4.day[m] ~ dbeta(1,1)
-# }
-s1.day ~ dbeta(1,1)
-s2.day ~ dbeta(1,1)
-s3.day ~ dbeta(1,1)
-s4.day ~ dbeta(1,1)
+# Growth per size class priors
+r1 ~ dgamma(1,0.3) # growth for small size class
+r2 ~ dgamma(1,0.3) # growth for medium size class
+r3 ~ dgamma(1,0.3) # growth for large size class
+r4 ~ dgamma(1,0.3) # growth for xlarge size class
 
 
-# Size transition hyperparameter
-t1.day ~ dbeta(1,1) # small -> medium
-t2.day ~ dbeta(1,1) # medium -> large
-t3.day ~ dbeta(1,1) # large -> xlarge
-
-# # Fecundity hyperparameter
-# f2.day ~ dgamma(1,0.3) # medium
-# f3.day ~ dgamma(1,0.3) # for both large and xlarge
-# Intercepts (a) and slopes (b)
-a1 ~ dunif(0, 10)
-a2 ~ dunif(0, 10)
-b1 ~ dunif(0, 5)
-b2 ~ dunif(0, 5)
-
-
-# Setting up parameters to be sensitive to days between primary sampling periods
-for(t in 1:(Q-1)) {
-  # Survival
-  # s1[t] <- pow(s1.day[ADS_quarter_counter[t]], days_btwn[t])
-  # s2[t] <- pow(s2.day[ADS_quarter_counter[t]], days_btwn[t])
-  # s3[t] <- pow(s3.day[ADS_quarter_counter[t]], days_btwn[t])
-  # s4[t] <- pow(s4.day[ADS_quarter_counter[t]], days_btwn[t])
-  s1[t] <- pow(s1.day, days_btwn[t])
-  s2[t] <- pow(s2.day, days_btwn[t])
-  s3[t] <- pow(s3.day, days_btwn[t])
-  s4[t] <- pow(s4.day, days_btwn[t])
-  # Size transition
-  t1[t] <- 1 - pow((1 - t1.day), days_btwn[t])
-  t2[t] <- 1 - pow((1 - t2.day), days_btwn[t])
-  t3[t] <- 1 - pow((1 - t3.day), days_btwn[t])
-  # Fecundity
-  f2[t] <- a1 + b1*(days_btwn[t]/91)
-  f3[t] <- a2 + b2*(days_btwn[t]/91)
-  f4[t] <- f3[t]
-}
 
 # Transition matrix (used for population size class growth & reproduction between primary sampling periods)
 for(t in 1:(Q-1)){
-  P[1,1,t] <- s1[t]*(1-t1[t])
-  P[1,2,t] <- f2[t]
-  P[1,3,t] <- f3[t]
-  P[1,4,t] <- f4[t]
-  P[2,1,t] <- t1[t]*s1[t]
-  P[2,2,t] <- s2[t]*(1-t2[t])
+  P[1,1,t] <- r1^days_btwn[t]
+  P[1,2,t] <- 0
+  P[1,3,t] <- 0
+  P[1,4,t] <- 0
+  P[2,1,t] <- 0
+  P[2,2,t] <- r2^days_btwn[t]
   P[2,3,t] <- 0
   P[2,4,t] <- 0
   P[3,1,t] <- 0
-  P[3,2,t] <- t2[t]*s2[t]
-  P[3,3,t] <- s3[t]*(1-t3[t])
+  P[3,2,t] <- 0
+  P[3,3,t] <- r3^days_btwn[t]
   P[3,4,t] <- 0
   P[4,1,t] <- 0
   P[4,2,t] <- 0
-  P[4,3,t] <- t3[t]*s3[t]
-  P[4,4,t] <- s4[t]
+  P[4,3,t] <- 0
+  P[4,4,t] <- r4^days_btwn[t]
 }
 
 
@@ -308,10 +272,10 @@ for(t in 1:Q) { # start primary sampling period loop
 
 for (t in 1:(Q-1)) { # start operations between primary sampling period loop
   # Calculate population at beginning of primary sampling period using remaining population from the end of previous sampling period X transition matrix
-    D[1,t] ~ dpois(R[1,t]*P[1,1,t] + R[2,t]*P[1,2,t] + R[3,t]*P[1,3,t] + R[4,t]*P[1,4,t])
-    D[2,t] ~ dpois(R[1,t]*P[2,1,t] + R[2,t]*P[2,2,t])
-    D[3,t] ~ dpois(R[2,t]*P[3,2,t] + R[3,t]*P[3,3,t])
-    D[4,t] ~ dpois(R[3,t]*P[4,3,t] + R[4,t]*P[4,4,t])
+    D[1,t] ~ dpois(R[1,t]*P[1,1,t])
+    D[2,t] ~ dpois(R[2,t]*P[2,2,t])
+    D[3,t] ~ dpois(R[3,t]*P[3,3,t])
+    D[4,t] ~ dpois(R[4,t]*P[4,4,t])
     # Set up first sampling instance of next primary sampling period
     for(k in 1:S){ # start size class loop
       N[k,1,t+1] <- D[k,t]
@@ -719,14 +683,16 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
 ```
 
 ```{r alternative_2_variants}
+# Number of iterations
+n_inter <- 50
 
-# Incorporating uncertainty about the starting population by simulating a range of values - starting with 25 to see how long it takes to run
-N_list <- round(rnorm(25, 100, 10))*area_size
+# Incorporating uncertainty about the starting population by simulating a range of values
+N_list <- round(rnorm(n_inter, 100, 10))*area_size
 
 # List of quarter results
 erad_results_list <- list()
 
-for(variant in 1:length(N_list)) {
+for(variant in 1:n_inter) {
   # Running model 
   erad_results_list[[variant]] <- quarter_operations(initial_N = N_list[variant], 
                                            initial_size_dist = size_dist, 
@@ -740,36 +706,42 @@ for(variant in 1:length(N_list)) {
 }
 
 # Save outputs 
-saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_alt_2_25.RDS"))
+saveRDS(erad_results_list, file = here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
 
+erad_results_list_2 <- readRDS(file = here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
 
-erad_plot_data <- list()
-for(variant in 1:length(erad_results_list)) {
-  erad_plot_data[[variant]] <- list()
-  results <- erad_results_list[[variant]]$all_quarters
+erad_plot_data_2 <- list()
+for(variant in 1:n_inter) {
+  erad_plot_data_2[[variant]] <- list()
+  results <- erad_results_list_2[[variant]]$all_quarters
   for(quarter in 1:erad_quarter_time_step) {
-    erad_plot_data[[variant]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
-    colnames(erad_plot_data[[variant]][[quarter]]) <- c("size_category", "N")
+    erad_plot_data_2[[variant]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+    colnames(erad_plot_data_2[[variant]][[quarter]]) <- c("size_category", "N")
     for(size in 1:length(size_class_names)) {
-      erad_plot_data[[variant]][[quarter]][size, 1] <- size_class_names[size]
-      erad_plot_data[[variant]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
+      erad_plot_data_2[[variant]][[quarter]][size, 1] <- size_class_names[size]
+      erad_plot_data_2[[variant]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
     }
   }
-  names(erad_plot_data[[variant]]) <- paste0("Quarter_", c(1:4))
+  names(erad_plot_data_2[[variant]]) <- c(1:4)
 }
-names(erad_plot_data) <- paste0("variant_", c(1:25))  
+names(erad_plot_data_2) <- paste0("variant_", c(1:n_inter))  
 
-erad_plot_data_melted <- melt(erad_plot_data, id.vars = colnames(erad_plot_data[[1]][[1]]))
-colnames(erad_plot_data_melted)[c(3:4)] <- c("Quarter", "variant")
-erad_plot_data_melted$size_category <- factor(erad_plot_data_melted$size_category, levels = size_class_names)
-erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:25)))
+erad_plot_data_melted_2 <- melt(erad_plot_data_2, id.vars = colnames(erad_plot_data_2[[1]][[1]]))
+colnames(erad_plot_data_melted_2)[c(3:4)] <- c("Quarter", "variant")
+erad_plot_data_melted_2$size_category <- factor(erad_plot_data_melted_2$size_category, levels = size_class_names)
+# erad_plot_data_melted$variant <- factor(erad_plot_data_melted$variant, levels = paste0("variant_", c(1:25)))
 
-variants_plot <- ggplot(erad_plot_data_melted, aes(x = Quarter, y = N, color = variant)) +
-  geom_path(aes(group = variant)) +
-  geom_point() +
+variants_plot_2 <- ggplot(erad_plot_data_melted_2, aes(x = Quarter, y = N, color = variant)) +
+  geom_path(aes(group = variant), show.legend = FALSE, color = "black") +
+  geom_point(show.legend = FALSE, color = "black") +
   #geom_hline(yintercept = K) +
-  facet_wrap(vars(size_category), scales = "free") +
-  theme_bw() 
+  facet_wrap(vars(size_category)) +
+  theme_bw() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks.y = element_blank(),
+  )
   # scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 
 
@@ -871,9 +843,155 @@ model_metric_1_fun <- function(input_list,
 }
 
 
-x <- model_metric_1_fun(erad_results_list, "simulated")
-                        
+alt_2_threshold_metrics <- model_metric_1_fun(erad_results_list_2, "simulated")
+alt_1_threshold_metrics <- model_metric_1_fun(erad_results_list_1, "simulated")                       
 
 
 
+```
+
+#### Cost calculation for each scenario
+
+```{r cost_setup}
+
+#### Cost calculations per method
+
+## Cost values are place holders, waiting for real costs from USDA
+# to be updated later:
+
+## Creating lists to store parameters used for multiple methods
+num_teams <- list()
+transect_hours_per_day <- list()
+overhead_hours <- list()
+per_device_cost <- list()
+
+# Values to calculate how many transects (length is based on CP, and between transect width of 20 meters is the current best practice)
+transect_length <- 220
+between_transects <- 20
+transect_coverage <- erad_coverage$visual # portion of area that has transects
+
+#### Costs shared by all transect-based methods
+# - one time transect cutting for 1 transect X number of transects
+# - transect maintenance at regular intervals (say 4 weeks), X number of transects
+# - hourly rate for employees
+init_transect <- 1000 # per transect cost to set up
+maint_transect <- 200 # every 4 weeks, per transect cost
+person_cost_per_hour <- 100
+
+##### Visual survey costs 
+# - number of searchers per night X search nights
+# - one time purchase of equipment (air rifles, headlamps, etc)
+# - person hours for any overhead activities, outside of searching, in a timescale that's easy to multiply - daily or weekly
+headlamp <- 500
+transect_hours_per_day$visual <- effort_erad_methods$visual
+num_teams$visual <- 1 # number of teams of 2 people searching
+overhead_hours$visual <- 10
+
+#### Trap costs
+# - one time purchase of traps, perhaps with a percentage of replacement based on time
+# - person hours to check traps & feed bait, performed every 2-3 days while traps are out
+# - bait population maintenance, a flat rate per time unit (weekly would be good) - may not be entirely necessary, leaving this out for now
+per_device_cost$trap <- 100 
+cost_per_mouse <- 6
+trap_spacing <- 20
+maintain_per_week_per_mouse <- 3.5
+num_teams$trap <- 1
+transect_hours_per_day$trap <- 6 # how many hours per day it takes to visit traps 
+misc_init_equip <- 500 # Summed together all other one-time purchase equipment costs, like air rifles
+overhead_hours$trap <- 10
+
+### Bait costs
+# - one time purchase of bait tubes, with a percentage of replacement based on time
+# - baits, to be replaced every 2-3 days 
+# - person hours to replace baits, every 2-3 days
+per_device_cost$bait_tube <- 100 
+overhead_hours$bait_tube <- 5
+num_teams$bait_tube <- 1
+transect_hours_per_day$bait_tube <- 4 # how many hours per day it takes to visit traps 
+
+
+```
+
+```{r cost_calculation_function}
+
+### Make below into function
+
+# Calculating number of transects in area (assuming 220 m long, 20 m between transects)
+area_length <- area_size*transect_coverage*10000/transect_length # converting the area covered by transect from hectares into meters squared
+num_transects <- round(area_length/between_transects)
+
+
+
+## Creating lists to store parameters used for multiple methods
+field_personnel_daily_cost <- list()
+init_equip <- list()
+devices_per_transect <- list()
+days_per_quarter <- list()
+total_quarters <- list()
+num_weeks <- list()
+daily_costs <- list()
+weekly_costs <- list()
+
+
+for (method in erad_methods[-1]) {
+  # Calculate the number of hours spent in transect in all methods
+  field_personnel_daily_cost[[method]] <- 2*num_teams[[method]]*transect_hours_per_day[[method]]*person_cost_per_hour 
+  
+}
+
+
+##### Visual survey costs 
+#field_personnel_daily_cost$visual <- 2*num_teams$visual*transect_hours_per_day$visual*person_cost_per_hour 
+init_equip$visual <- headlamp*2*num_teams$visual + misc_init_equip 
+
+#### Trap costs
+devices_per_transect$trap <- transect_length/trap_spacing
+init_mice <- cost_per_mouse*devices_per_transect$trap*num_transects # 1 live mouse per trap
+init_equip$trap <- per_device_cost$trap*devices_per_transect$trap*num_transects + init_mice
+maintain_mice <- devices_per_transect$trap*num_transects*maintain_per_week_per_mouse  # cost to feed mice - they're fed twice per week
+#field_personnel_daily_cost$trap <- 2*num_teams$trap*transect_hours_per_day$trap*person_cost_per_hour
+
+
+### Bait costs
+devices_per_transect$bait_tube <- transect_length/
+init_DNM <- 2*devices_per_transect$bait_tube*num_transects # 1 dead neonatal mouse (DNM) per bait tube at $2/DNM
+init_equip$bait_tube <- per_device_cost$bait_tube*devices_per_transect$bait_tube*num_transects + init_DNM
+replacement_baits <- 2*devices_per_transect$bait_tube*num_transects # baits need to be replaced every 2-3 days even if they aren't taken by snakes (they decompose fast)
+#field_personnel_daily_cost$bait_tube <- 2*num_teams$bait_tube*transect_hours_per_day$bait_tube*person_cost_per_hour
+
+
+## Calculate total number of days and quarters 
+for(method in erad_methods[-1]) {
+  days_per_quarter[[method]] <- length(erad_days[[method]])
+  total_quarters[[method]] <- length(erad_quarters[[method]])
+}
+
+
+## One time costs 
+one_time_costs <- init_transect*num_transects + sum(unlist(init_equip))
+
+## Daily costs
+for(method in erad_methods[-1]) {
+  daily_costs[[method]] <- total_quarters[[method]]*days_per_quarter[[method]]*field_personnel_daily_cost[[method]]
+}
+daily_costs$bait_tube <- daily_costs$bait_tube + replacement_baits
+
+## Periodic costs (transect maintenance, overhead personnel hours) - below requires that methods are being used 
+## continuously on a weekly basis between the first and last days, so this may need to be adjusted later
+for(method in erad_methods[-1]) {
+  num_weeks[[method]] <- round((erad_days[[method]][length(erad_days[[method]])]-erad_days[[method]][1])/7) 
+  weekly_costs[[method]] <- num_weeks[[method]]*(overhead_hours[[method]]*person_cost_per_hour) 
+}
+weekly_costs$trap <- weekly_costs$trap + maintain_mice
+
+
+# Transect monthly maintenance (needed for as long as any of the transect methods are being used)
+all_transect_days <- unique(unlist(erad_days[2:4]))
+num_weeks$transect <- round((max(all_transect_days) - min(all_transect_days))/7)
+monthly_costs <- floor(num_weeks$transect/4)*maint_transect*num_transects # transect maintenance probably needs to happen on this schedule anyway, so this is probably fine
+
+
+## Total costs for all of time series
+# Visual survey
+total_cost <- one_time_costs + sum(unlist(daily_costs)) + sum(unlist(weekly_costs)) + monthly_costs
 ```
