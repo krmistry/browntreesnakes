@@ -17,8 +17,15 @@ source(here("Scripts/02_results_functions.R"))
 # Set study/eradication area size, which dictates both K and the initial population
 area_size <- 20
 
-# Set carrying capacity for this population:
-K <- 119*area_size
+# Set density dependence parameter for this population, based on maximum density estimates in the literature, 
+# specifically Rodda and Savidge, 2007 (>100/ha in 1980s, which was definitely exceeding carrying capacity, 
+# they thought it had reached equilibrium at roughly half that, so >50/ha?) and Rodda et al. 1992 (119/ha 
+# estimated in north and west in 1985-1990, but again these populations were likely over capacity, and also 
+# 63/ha in central Guam, where they had been established longer and might have been more stabilized). 
+# This value doesn't literally translate to the actual carrying capacity though, it's just a way to 
+# control the variation in the half-normal distribution, so I erred on the size of the largest value (may 
+# want to change this in the future though)
+K <- 60*area_size
 
 
 # # # Set up initial population size based on previous model runs (may change this later):
@@ -33,8 +40,8 @@ K <- 119*area_size
 #                 "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
 
 ## For initial population roughly based on 10 ha runs in the past:
-N <- 100*area_size
-size_dist <- c(0.6, 0.1, 0.1, 0.2)
+N <- 50*area_size
+size_dist <- c(0.4, 0.05, 0.15, 0.4)
 
 
 # Growth probability (p_g)
@@ -48,7 +55,7 @@ day_time_step <- 91
 erad_quarters <- list()
 erad_quarters$ADS <- c(2, 3, 4, 5, 6, 7)
 erad_quarters$visual <- c(2, 3, 4, 5, 6, 7)
-erad_quarters$trap <- c(3, 6)
+erad_quarters$trap <- c(2, 3)
 erad_quarters$bait_tube <- c(1,8)
 erad_days <- list()
 erad_days$ADS <- c(7,14,21)
