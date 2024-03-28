@@ -20,6 +20,7 @@ library(vctrs)
 source(here("Scripts/00_user_inputs.R"))
 source(here("Scripts/01_model_functions.R"))
 source(here("Scripts/02_results_functions.R"))
+source(here("Scripts/model_evaluation.R"))
 ```
 
 ## Target area for eradication
@@ -418,6 +419,24 @@ est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_outputs
 
 ```
 
+```{r alternative_1_metrics}
+IBM_results <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
+
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
+
+model_metrics <- list()
+for(variant in 1:num_variants) {
+  var_name <- paste0("jags_output_alt_1_var.", variant, ".rds")
+  # Read in variants' estimation model results
+  jags_output <- readRDS(here("Results", "scenario_1", var_name))
+  model_metrics[[variant]] <- eval_metrics_fun(IBM_results[[variant]],                                       jags_output, obs_quarters)
+}
+
+
+```
+
+
+
 ```{r estimation_test}
 erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list[[1]],
                                               methods = obs_methods)
@@ -620,11 +639,11 @@ effort_erad_methods$visual <- 4*2*teams
 area_size <- 50 # increase to 50 for real runs, this is just to get everything working quicker
 
 # Set carrying capacity for this population:
-K <- 119*area_size
+K <- (119/2)*area_size
 
 ## For initial population, based on previous runs to find roughly eqiulibrium N and size distribution:
 N <- 100*area_size
-size_dist <- c(0.4, 0.05, 0.15, 0.4)
+size_dist <- c(0.4, 0.1, 0.1, 0.4)
 
 
 # Growth probability (p_g)
@@ -861,7 +880,7 @@ nc <- 3
 # List to capture jags output
 jags_output_list <- list()
 
-for(variant in 26:50) {
+for(variant in 31:50) {
   # Reformat simulation results
   erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list_2[[variant]],
                                               methods = obs_methods)
@@ -947,6 +966,26 @@ est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_output_
                        erad_quarter_results = erad_results_list_2[[variant]],
                        erad_quarters = erad_quarters)
 }
+
+```
+
+
+```{r alternative_2_metrics}
+
+IBM_results <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
+
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
+
+model_metrics <- list()
+for(variant in 1:num_variants) {
+  var_name <- paste0("jags_output_alt_2_var.", variant, ".rds")
+  # Read in variants' estimation model results
+  jags_output <- readRDS(here("Results", "scenario_1", var_name))
+  model_metrics[[variant]] <- eval_metrics_fun(IBM_results[[variant]],                                       jags_output, obs_quarters)
+}
+
+saveRDS(model_metrics, file = here("Results", "scenario_1", "alt_2_model_metrics_1.rds"))
+
 
 ```
 
@@ -1053,6 +1092,8 @@ alt_1_threshold_metrics <- model_metric_1_fun(erad_results_list_1, "simulated")
 
 
 ```
+
+
 
 #### Cost calculation for each scenario
 
@@ -1199,3 +1240,8 @@ monthly_costs <- floor(num_weeks$transect/4)*maint_transect*num_transects # tran
 # Visual survey
 total_cost <- one_time_costs + sum(unlist(daily_costs)) + sum(unlist(weekly_costs)) + monthly_costs
 ```
+
+
+
+
+
