@@ -129,7 +129,8 @@ model_validation_fun <- function(quarter_timeseries,
 all_observations_fun <- function(erad_results_ts,
                                  #erad_days = erad_days[c(2:3)], # if more than one method, use c() in argument
                                  #erad_quarters = erad_quarters[c(2:3)], # if more than one method, use c() in argument
-                                 methods) {
+                                 methods,
+                                 num_methods) {
   # Create vectors with quarters and days when eradication occurred
   all_quarters <- sort(unique(unlist(erad_quarters[methods])))
   all_days <- sort(unique(unlist(erad_days[methods])))
@@ -144,11 +145,11 @@ all_observations_fun <- function(erad_results_ts,
                                                         size_class_limits)
   }
   # Creating empty array to summarize results (for input into jags model)
-  observations_array <- array(0, dim = c(2,4, length(all_days), length(all_quarters)))
+  observations_array <- array(0, dim = c(num_methods, 4, length(all_days), length(all_quarters)))
   # Effort
   effort_list <- erad_results_ts$all_effort[unlist(lapply(erad_results_ts$all_effort, length) != 0)]
   all_effort <- bind_rows(effort_list)
-  effort_array <- array(0, dim = c(2,length(all_days), length(all_quarters)))
+  effort_array <- array(0, dim = c(num_methods,length(all_days), length(all_quarters)))
   # Count the number of observed snake for each quarter & day that effort occurred
   # for(quarter in all_quarters) {
   #   for(day in all_days) {
@@ -168,6 +169,10 @@ all_observations_fun <- function(erad_results_ts,
       }
     }
   }
+  # If more than 1 method used, combine methods to make array one dimension smaller
+  
+  observations_array <- 
+  
   return(list(observation = observations_array,
               effort = effort_array))
 }
@@ -380,7 +385,7 @@ estimated_N_plots <- function(jags_output,
   colnames(real_N_long)[2:3] <- c("size_class", "N")
   real_N_long$source <- "simulated"
   
-  # Adding 0s for upper and lower confidence intervals, so it has the same columns as mean_N_long
+  # Adding NAs for upper and lower confidence intervals, so it has the same columns as mean_N_long
   real_N_long$lower_bound <- NA
   real_N_long$upper_bound <- NA
   
