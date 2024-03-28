@@ -141,7 +141,7 @@ standard_between_transects <- 20 # meters
 # - hourly rate for employees
 init_transect_cost <- 100 # per transect cost to set up
 maint_transect_cost <- 50 # every 4 weeks, per transect cost
-person_cost_per_hour <- 50
+person_cost_per_hour <- 80
 
 ##### Visual survey costs 
 # - number of searchers per night X search nights
@@ -158,7 +158,7 @@ overhead_hours$visual <- 10 # cumulative hours, not per person
 device_spacing$trap <- 20
 per_device_cost$trap <- 100 
 per_bait_cost$trap <- 6
-maintain_per_week_per_mouse <- 3
+maintain_per_week_per_mouse <- 1.7
 transect_hours_per_day$trap <- 6 # how many hours per day it takes to visit traps 
 misc_init_equip$trap <- 500 # Summed together all other one-time purchase equipment costs, like air rifles
 overhead_hours$trap <- 10
