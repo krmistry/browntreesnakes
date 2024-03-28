@@ -12,7 +12,7 @@ daily_gompertz_growth_fun <- function(snake,
     # Selecting correct growth coefficients based on individual's sex and growth quantile
     growth_coefs <- gompertz_coefficients[[snake$growth_quant]][snake$sex]
     # Snake grows
-    snake$SVL <- snake$SVL + growth_coefs[1,] + growth_coefs[2,]*log(snake$SVL/700)
+    snake$SVL <- snake$SVL*exp(growth_coefs[1,] + growth_coefs[2,]*log(snake$SVL/700))
   } else {
     snake$SVL <- snake$SVL
   }
@@ -91,7 +91,8 @@ gen_offspring_fun <- function(mom_pop,
   offspring$SVL <- runif(total_offspring, 250, 350) # Lower limit from Rodda and Savidge 2007 
   offspring$sex <- sample(c("M", "F"), total_offspring, replace = T)
   offspring$repro_prob <- 0
-  offspring$growth_quant <- sample(growth_quantiles, total_offspring, replace = T)
+  offspring$growth_quant <- sample(growth_quantiles, total_offspring, replace = T, 
+                                   prob = c(0.25, 0.5, 0.25, 0.1, 0.05))
   
   ## Combining the offspring with mothers and return as one dataframe
   return(offspring)
@@ -441,6 +442,7 @@ erad_timing_fun <- function(day,
   # }
   transect_encounter_pop[[1]] <- pop[pop$ID %in% transect_IDs, ]
   ADS_encounter_pop <- pop[pop$ID %in% ADS_IDs, ]
+  # print(paste0("ADS encounters ", nrow(ADS_encounter_pop)))
   effort <- list()
   for(method in 1:length(erad_method)) {
     method_name <- erad_method[method]
@@ -527,7 +529,7 @@ erad_timing_fun <- function(day,
 # quarter <- 3
 # growing_pop <- init_pop_fun(N, size_dist, size_class_limits)
 # transect_pop <- slice_sample(growing_pop, prop = erad_coverage$visual)
-# ADS_overlap_w_transect <- 0
+# ADS_overlap_w_transect <- 1
 # total_ADS_prop <- nrow(growing_pop)*erad_coverage$ADS
 # non_transect_ADS <- total_ADS_prop - nrow(slice_sample(transect_pop, prop = ADS_overlap_w_transect))
 # ADS_pop <- rbind(slice_sample(growing_pop, n = non_transect_ADS),
@@ -539,7 +541,7 @@ erad_timing_fun <- function(day,
 #                      pop = growing_pop,
 #                      ADS_IDs = ADS_pop_IDs,
 #                      transect_IDs = transect_pop_IDs)
-# # 
+# #
 # 
 # remove(day)
 # remove(growing_pop)
@@ -588,7 +590,7 @@ daily_operations <- function(first_day_pop,
                      overlap_pop_IDs)
     # print(paste0("ADS pop ID day 1 = ", length(ADS_pop_IDs)))
     } else if (ADS_overlap_w_transect == 0) { # if there is no overlap between transects & ADS
-      #print(paste("transect", length(transect_pop_IDs)))
+      # print(paste("transect", length(transect_pop_IDs)))
       # Proportion vulnerable to ADS
       ADS_pop_IDs <- sample(daily_pop[[1]]$ID[!daily_pop[[1]]$ID %in% transect_pop_IDs],
                             nrow(daily_pop[[1]])*erad_coverage$ADS)
@@ -597,6 +599,9 @@ daily_operations <- function(first_day_pop,
     no_encounter_pop_IDs <- daily_pop[[1]]$ID[!daily_pop[[1]]$ID %in% unique(c(transect_pop_IDs, ADS_pop_IDs))]
     # print(paste("no_encounter", length(no_encounter_pop_IDs)))
   }
+  # print(paste0("transect_pop_IDs ", length(transect_pop_IDs)))
+  # print(paste0("ADS_pop_IDs ", length(ADS_pop_IDs)))
+  # print(paste0("no_encounter_pop_IDs ", length(no_encounter_pop_IDs)))
   # Loop for each day in 90 days
   for(day in 1:(total_days-1)) {
     #  All snakes are exposed to natural mortality
@@ -751,7 +756,10 @@ daily_operations <- function(first_day_pop,
       day_before_erad_pop <- NA
       day_after_erad_pop <- NA
     }
-  }
+  } else {
+    day_before_erad_pop <- NA
+    day_after_erad_pop <- NA
+  } 
   
   return(list(daily_timeseries = daily_pop,
               all_erad_results = erad_results,
@@ -944,6 +952,7 @@ quarter_operations <- function(initial_N,
                                       quarter = quarter,
                                       ADS_overlap_w_transect = ADS_overlap_on_transect)
     daily_timeseries_pop <- daily_results$daily_timeseries
+    # print(paste0("daily timeseries indiv ", nrow(daily_timeseries_pop[[1]])))
     # print(str(daily_timeseries_pop[[total_days]]))
     if(length(daily_results$all_erad_results) > 0) {
     # Filling the observed, unobserved dead snakes and effort lists:
