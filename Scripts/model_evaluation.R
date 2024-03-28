@@ -1,6 +1,6 @@
 ########################### Model evaluation metrics ########################### 
 
-obs_quarters <- unique(unlist(erad_quarters[erad_methods[c(2,3)]]))
+# obs_quarters <- unique(unlist(erad_quarters[erad_methods[c(2,3)]]))
 
 # Function to summarize simulation data into size class N for each quarter
 summed_sim_data_fun <- function(simulation_quarter_data,
@@ -23,8 +23,8 @@ summed_sim_data_fun <- function(simulation_quarter_data,
   return(real_data_summed)
 }
 
-# Test
-summed_data <- summed_sim_data_fun(erad_quarter_results)
+# # Test
+# summed_data <- summed_sim_data_fun(erad_quarter_results)
 
 
 # Function to separate (and sum when appropriate) estimated values - mean N, SD of N, and credible intervals for 95th percentile
@@ -60,8 +60,8 @@ summed_est_results_fun <- function(output_jags,
          estimated_N_95_CI_upper = estimated_N_95_CI_upper))
 }
 
-# Test
-summed_results <- summed_est_results_fun(output_jags, obs_quarters)
+# # Test
+# summed_results <- summed_est_results_fun(output_jags, obs_quarters)
 
 
 ### Function to calculate:
@@ -92,10 +92,10 @@ accuracy_metrics_fun <- function(real_data,
   return(list(RMSE = RMSE, PRD = PRD))
 }
 
-# Test
-accuracy_metrics <- accuracy_metrics_fun(summed_data,
-                                         summed_results$estimated_N,
-                                         obs_quarters)
+# # Test
+# accuracy_metrics <- accuracy_metrics_fun(summed_data,
+#                                          summed_results$estimated_N,
+#                                          obs_quarters)
 
 
 ### Function to calculate:
@@ -104,6 +104,7 @@ accuracy_metrics <- accuracy_metrics_fun(summed_data,
 
 # Extracting estimated sd for N from jags output
 percent_CV_fun <- function(estimated_N_sd,
+                           estimated_N,
                            obs_quarters) {
   
   y3 <- list()
@@ -120,8 +121,10 @@ percent_CV_fun <- function(estimated_N_sd,
   return(percent_CV)
 }
 
-# Test
-percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, obs_quarters)
+# # Test
+# percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, 
+#                              summed_results$estimated_N, 
+#                              obs_quarters)
 
 ### Function to calculate coverage (how often the value falls between the 95% credible intervals)
 coverage_fun <- function(lower_CI,
@@ -153,10 +156,10 @@ coverage_fun <- function(lower_CI,
   return(coverage)
 }
 
-# Test
-coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
-                         summed_results$estimated_N_95_CI_upper,
-                         obs_quarters, real_data_summed)
+# # Test
+# coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
+#                          summed_results$estimated_N_95_CI_upper,
+#                          obs_quarters, real_data_summed)
 
 
 ### Putting all of the above functions together to produce a single list of accuracy metrics for
@@ -174,7 +177,9 @@ eval_metrics_fun <- function(simulation_quarter_data,
                                            summed_results$estimated_N,
                                            obs_quarters)
   # Calculate percent CV 
-  percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, obs_quarters)
+  percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, 
+                               summed_results$estimated_N, 
+                               obs_quarters)
   # Calculate coverage
   coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
                            summed_results$estimated_N_95_CI_upper,
@@ -186,26 +191,10 @@ eval_metrics_fun <- function(simulation_quarter_data,
               summed_results = summed_results))
 }
 
-# Test
-model_metrics <- eval_metrics_fun(erad_quarter_results,
-                                  output_jags,
-                                  unique(unlist(erad_quarters[erad_methods[c(2,3)]])))
-
-model_cost <- cost_function(methods = names(erad_quarters), 
-                            erad_days, 
-                            erad_quarters, 
-                            num_transects, 
-                            num_teams, 
-                            area_size)
-
-
-model_metrics <- list()
-for(variant in 1:num_variants) {
-  model_metrics[[variant]] <- eval_metrics_fun(IBM_quarter_results,
-                                               jags_output_list[[variant]],
-                                               unique(unlist(erad_quarters[erad_methods[c(2,3)]])))
-}
-
+# # Test
+# model_metrics <- eval_metrics_fun(erad_quarter_results,
+#                                   output_jags,
+#                                   unique(unlist(erad_quarters[erad_methods[c(2,3)]])))
 
 
 
