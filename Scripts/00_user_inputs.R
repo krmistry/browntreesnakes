@@ -70,6 +70,11 @@ gompertz_coefficients[[5]]$M <- c(0.6224156 + 0.1634791,
                                   0.05512590, 
                                   0.05613037)
 
+# Turning the above annual values into daily values
+for(t in tau) {
+  gompertz_coefficients[[t]] <- gompertz_coefficients[[t]]/365
+}
+
 # Calculate the asymptotic values for each of these growth curves 
 # (in order to make sure that an inappropriate quantile isn't assigned if a snake has a 
 # large SVL in the initial population)
@@ -90,10 +95,10 @@ growth_quantiles <- paste0("tau_", c(0.25, 0.5, 0.75, 0.9, 0.95))
 maturity_mean <- 910 + (1025-910)/2
 maturity_sd <- (1025-910)/3.29
 
-# Parameter creating offspring
+# Parameter creating offspring - value based on Nafus et al. 2022 data (genetically tracing offspring to parents)
 lambda <- 2.2
 
-# Mortality rates for each size class, based on data from Nafus et al. 2021 
+# Mortality rates for each size class, based on data from Nafus et al. 2022
 # (not including life span cutoff for now, we'll see how it goes and add it if snakes are 
 # living too long)
 N_mortality <- c("small" = 0.001,
@@ -140,18 +145,16 @@ for(method in 1:length(mortality_prob_erad_methods)) {
 }
 
 # Artificially increasing detection rates while I'm working on making the estimation model work
-mortality_prob_erad_methods[[2]] <- mortality_prob_erad_methods[[2]]*10
-mortality_prob_erad_methods[[3]] <- mortality_prob_erad_methods[[3]]*10
-mortality_prob_erad_methods[[4]] <- mortality_prob_erad_methods[[4]]*10
+# mortality_prob_erad_methods[[2]] <- mortality_prob_erad_methods[[2]]*100
+# mortality_prob_erad_methods[[3]] <- mortality_prob_erad_methods[[3]]*100
+# mortality_prob_erad_methods[[4]] <- mortality_prob_erad_methods[[4]]*10
 
 # Standard amount of effort per day for each eradication method, in hours (placeholders, figure out what the actual number of hours is later)
 effort_erad_methods <- list()
 effort_erad_methods$ADS <- 4
-effort_erad_methods$visual <- 6
+effort_erad_methods$visual <- 4
 effort_erad_methods$trap <- 12 # assumes that the trap is only working at night - check to see what the convention is for BTS
 effort_erad_methods$bait_tube <- 12 # Same as trap
 
-# Percentage of transects that occur within ADS coverage area:
-ADS_transect_overlap <- 0.5
 
 

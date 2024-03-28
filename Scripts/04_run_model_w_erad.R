@@ -15,10 +15,17 @@ source(here("Scripts/02_results_functions.R"))
 
 # Parameters that may be changed or subject to sensitivity analysis or to simulate over
 # Set study/eradication area size, which dictates both K and the initial population
-area_size <- 10
+area_size <- 20
 
-# Set carrying capacity for this population:
-K <- 119*area_size
+# Set density dependence parameter for this population, based on maximum density estimates in the literature, 
+# specifically Rodda and Savidge, 2007 (>100/ha in 1980s, which was definitely exceeding carrying capacity, 
+# they thought it had reached equilibrium at roughly half that, so >50/ha?) and Rodda et al. 1992 (119/ha 
+# estimated in north and west in 1985-1990, but again these populations were likely over capacity, and also 
+# 63/ha in central Guam, where they had been established longer and might have been more stabilized). 
+# This value doesn't literally translate to the actual carrying capacity though, it's just a way to 
+# control the variation in the half-normal distribution, so I erred on the size of the largest value (may 
+# want to change this in the future though)
+K <- 60*area_size
 
 
 # # # Set up initial population size based on previous model runs (may change this later):
@@ -32,9 +39,9 @@ K <- 119*area_size
 #                 "large" = nrow(last_quarter[last_quarter$SVL > size_class_limits[3, 1] & last_quarter$SVL <= size_class_limits[3, 2],])/N,
 #                 "xlarge" = nrow(last_quarter[last_quarter$SVL > size_class_limits[4, 1],])/N)
 
-# # For initial population roughly based on 10 ha runs in the past:
-N <- 100*area_size
-size_dist <- c(0.6, 0.1, 0.1, 0.2)
+## For initial population roughly based on 10 ha runs in the past:
+N <- 50*area_size
+size_dist <- c(0.4, 0.05, 0.15, 0.4)
 
 
 # Growth probability (p_g)
@@ -46,24 +53,25 @@ day_time_step <- 91
 
 # Quarters where eradication methods are used, and which days in that quarter:
 erad_quarters <- list()
-erad_quarters$ADS <- c(3, 6)
-erad_quarters$visual <- c(2, 3, 6, 7)
-erad_quarters$trap <- c(3, 6)
-erad_quarters$bait_tube <- c(2, 3, 6, 7)
+erad_quarters$ADS <- c(2, 3, 4, 5, 6, 7)
+erad_quarters$visual <- c(2, 3, 4, 5, 6, 7)
+erad_quarters$trap <- c(2, 3)
+erad_quarters$bait_tube <- c(1,8)
 erad_days <- list()
 erad_days$ADS <- c(7,14,21)
-erad_days$visual <- c(28:34, 56:62)
-erad_days$trap <- c(56:62)
+erad_days$visual <- c(28:62)
+erad_days$trap <- c(28:34)
 erad_days$bait_tube <- c(28:34)
 
 # Coverage for each method (totally arbitrary, adjust later)
 erad_coverage <- list()
 erad_coverage$ADS <- 0.5
-erad_coverage$visual <- 0.2
-erad_coverage$trap <- 0.2
-erad_coverage$bait_tube <- 0.2
+erad_coverage$visual <- 0.5
+erad_coverage$trap <- 0.5
+erad_coverage$bait_tube <- 0.5
 # Overlap of ADS over transects
-ADS_overlap_on_transect <- 0.5
+ADS_overlap_on_transect <- 0.75 # i.e. total area coverage, by at least one method 
+
 
 
 # Running model 
@@ -169,6 +177,18 @@ colnames(erad_prop) <- c("Quarter", "Erad_proportion")
 ggplot(erad_prop) +
   geom_col(aes(y = Erad_proportion, x = Quarter)) +
   theme_bw()
+
+
+
+
+### Encounter probability 
+# Because the encounter probability has multiple pieces - the encounter probability per size, and then
+# coverage (if coverage isn't 100% - if it is, then it's only the encounter probability per size
+
+true_encounter_prob <- erad_coverage$visual*mortality_prob_erad_methods$visual
+
+
+
 
 
 
