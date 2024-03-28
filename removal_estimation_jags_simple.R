@@ -7,6 +7,7 @@ library(tictoc)
 library(fdrtool)
 library(vctrs)
 library(scales)
+library(vctrs)
 
 ## Loading objects and functions
 source(here("Scripts/00_user_inputs.R"))
@@ -20,7 +21,7 @@ source(here("Scripts/02_results_functions.R"))
 # consist_erad_quarter_results <- readRDS("consist_test_erad_quarter_results.rds")
 
 # Isolating methods used in this version & the quarters:
-obs_methods <- erad_methods[c(2:3)]
+obs_methods <- erad_methods[2] # manually changed to just 1 for now, need to make this automatic
 obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
 
 # Using only visual data
@@ -33,10 +34,10 @@ erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_quarter_resul
 ##### Reformatting to merge I and J into one dimension, with odds being visual and evens being trap
 
 # Values needed for array dimensions & loops
-S <- 4 # number of size classes 
-Q <- length(unique(unlist(erad_quarters[obs_methods]))) # Primary sampling periods (quarters)
+S <- length(size_class_names) # number of size classes 
+Q <- length(obs_quarters) # Primary sampling periods (quarters)
 I <- rep(max(length(erad_days[[obs_methods[1]]]), length(erad_days[[obs_methods[2]]]))*2, Q) # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
-
+J <- length(obs_methods)
 
 removals_array_v2 <- array(dim = c(S, I[1], Q))
 effort_array_v2 <- array(dim = c(I[1], Q))
@@ -63,34 +64,24 @@ model {
 
 # Set up first row of N
 for(k in 1:S) {
-  p.miss[1,k,1:1000] <- rep(1/1000,1000)
-  miss[1,k] ~ dcat(p.miss[1,k,1:1000])
+  p.miss[1,k,1:N_prior] <- rep(1/N_prior,N_prior)
+  miss[1,k] ~ dcat(p.miss[1,k,1:N_prior])
   N[k,1,1] <-  N.base[k,1,1] + miss[1,k]
 }
 
 # Parameter priors
-# beta.p[1] ~ dunif(0, 10) # encounter slope small
-# beta.p[2] ~ dunif(0, 10) # encounter slope medium
-# beta.p[3] ~ dunif(0, 10) # encounter slope for large
-# beta.p[4] ~ dunif(0, 10) # encounter slope for x-large
-# alpha.p[1] ~ dunif(-10,10) # encounter intercept small
-# alpha.p[2] ~ dunif(-10,10) # encounter intercept medium
-# alpha.p[3] ~ dunif(-10,10) # encounter intercept large
-# alpha.p[4] ~ dunif(-10, 10) # encounter slope x-large
 
 for(k in 1:S) {
-  beta.p[k, 1] ~ dunif(0, 10)
-  beta.p[k, 2] ~ dunif(0, 10)
-  alpha.p[k, 1] ~ dunif(-10, 10)
-  alpha.p[k, 2] ~ dunif(-10,10)
-  for(v in vis_days) {
-    beta.p[k, v] <- beta.p[k,1] 
-    alpha.p[k, v] <- alpha.p[k,1]
-  }
-  for(r in trap_days) {
-    beta.p[k, r] <- beta.p[k,2]
-    alpha.p[k, r] <- alpha.p[k,2]
-  }
+    beta.p[k] ~ dunif(0, 10)
+    alpha.p[k] ~ dunif(-10, 10)
+    # for(v in vis_days) {
+    #   beta.p[k, v] <- beta.p[k,1] 
+    #   alpha.p[k, v] <- alpha.p[k,1]
+    # }
+    # for(r in trap_days) {
+    #   beta.p[k, r] <- beta.p[k,2]
+    #   alpha.p[k, r] <- alpha.p[k,2]
+    # }
 }
 
 # Growth per size class priors
@@ -127,7 +118,7 @@ for(t in 1:Q) { # start primary sampling period loop
       for(i in 1:I) { # start secondary sampling instances loop
       # Calculate encounter probability for each method, secondary sampling instance and primary sampling period
       # Odd columns are visual, even columns are trap
-        logit(p[k,i,t]) <- alpha.p[k,i] + beta.p[k,i] * log(xi[i,t])
+        logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t])
       #***** version below runs, but is not method specific *****
       #  logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t]) # effort is not size-dependent
       # Calculate removals based on encounter probability and M (population in within i instance)
@@ -199,7 +190,10 @@ inits <- function (){
 
 # Creating vectors for trap and vis days
 vis_days <- seq(3, I[1], 2)
-trap_days <- seq(4, I[1], 2)
+trap_days <- seq(4, I[1], 2) # c(NA) if trapping not done
+
+# Value for a somewhat informative prior for N
+N_prior <- 75*area_size
 
 # Bundle data together
 data <- list(Y = removals_array_v2,
@@ -208,16 +202,19 @@ data <- list(Y = removals_array_v2,
              days_btwn = date_diff, 
              N.base = N.base,
              vis_days = vis_days,
-             trap_days = trap_days)
+             trap_days = trap_days,
+             N_prior = N_prior)
 
 # Parameters monitored
-parameters <- c("N", "r1", "r2", "r3", "r4", 
-                "p")
+parameters <- c("N", "r1", "r2", "r3", "r4", "alpha.p", "beta.p",
+                "p", "N.sum")
+
+
 
 # MCMC settings
 nt <- 1
-nb <- 50000
-ni <- 100000 + nb
+nb <- 10000
+ni <- 30000 + nb
 nc <- 3
 
 # Call JAGS Function
@@ -245,9 +242,11 @@ for(iter in 1:50) {
   print( paste0("iteration ", iter, " complete"))
 }
 
-## Saving and restoring the 50 run consistency check data
-saveRDS(consist_test_output_jags, file = "consistency_test_outputs_simple_12.5.23.rds")
+## Saving and restoring the 50 run consistency check results and the input data
+saveRDS(consist_test_output_jags, file = "consistency_test_outputs_simple_12.21.23.rds")
+# saveRDS(erad_quarter_results, file = "consistency_test_input_data_12.21.23.rds")
 # consist_test_output_jags <- readRDS("consistency_test_outputs_8.16.23.rds")
+# output_jags <- readRDS("consistency_test_outputs_simple_12.21.23.rds")
 
 mean_outputs <- list()
 mean_outputs$N_sum <- as.data.frame(matrix(NA, nrow = 50, ncol = length(obs_quarters)))
@@ -256,21 +255,28 @@ mean_outputs$p_vis <- as.data.frame(matrix(NA, nrow = 50, ncol = 4))
 colnames(mean_outputs$p_vis) <- size_class_names
 mean_outputs$p_trap <- as.data.frame(matrix(NA, nrow = 50, ncol = 4))
 colnames(mean_outputs$p_trap) <- size_class_names
+mean_outputs$r_values <- as.data.frame(matrix(NA, nrow = 50, ncol = 4))
+colnames(mean_outputs$r_values) <- size_class_names
 for(iter in 1:50) {
   # Separating out encounter probability for visual survey vs trapping; since effort is the same throughout, the encounter probability for each size class is the same through time
   mean_outputs$p_vis[iter, ] <- consist_test_output_jags[[iter]]$p[,1,1] 
   mean_outputs$p_trap[iter, ] <- consist_test_output_jags[[iter]]$p[,2,2] # depends on trap days
+  # Saving growth rates
+  mean_outputs$r_values[iter, 1] <- consist_test_output_jags[[iter]]$r1
+  mean_outputs$r_values[iter, 2] <- consist_test_output_jags[[iter]]$r2
+  mean_outputs$r_values[iter, 3] <- consist_test_output_jags[[iter]]$r3
+  mean_outputs$r_values[iter, 4] <- consist_test_output_jags[[iter]]$r4
   for(t in 1:Q) {
     mean_outputs$N_sum[iter, t] <- consist_test_output_jags[[iter]]$N.sum[t] # didn't actually sum all 4 years, just the first 3 (fixed for next set of runs)
   }
 }
 
-par(mfrow = c(1,3))
+par(mfrow = c(2,3))
 hist(mean_outputs$N_sum$Quarter_2)
 abline(v = nrow(erad_quarter_results$quarter_timeseries[[3]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_3)
 abline(v = nrow(erad_quarter_results$quarter_timeseries[[4]]), col = "red")
-hist(mean_outputs$N_sum$Quarter_4)
+hist(mean_outputs$N_sum$Quarter_4, xlim = c(900, 1200))
 abline(v = nrow(erad_quarter_results$quarter_timeseries[[5]]), col = "red")
 hist(mean_outputs$N_sum$Quarter_5)
 abline(v = nrow(erad_quarter_results$quarter_timeseries[[6]]), col = "red")
@@ -296,7 +302,6 @@ hist(mean_outputs$p_trap$large, xlim = c(0.0022, 0.0065))
 abline(v = mortality_prob_erad_methods$trap[3]*erad_coverage$trap, col = "red")
 hist(mean_outputs$p_trap$xlarge, xlim = c(0.002, 0.011))
 abline(v = mortality_prob_erad_methods$trap[4]*erad_coverage$trap, col = "red")
-
 
 
 traceplot(output_jags, parameters = "alpha.p")
@@ -325,16 +330,15 @@ p_2_v2 <- p_2[,,8:14,2:3] # trapping only occurred in quarters 2 & 3, in second 
 
 
 # Calculating true size class growth rates
-size_class_growth <- as.data.frame(matrix(NA, nrow = 4, ncol = 4))
-colnames(size_class_growth) <- c("size_class", paste0("inter-primary_", c(1:3)))
-size_class_growth$size_class <- size_class_names
+size_class_growth <- as.data.frame(matrix(NA, nrow = length(obs_quarters), ncol = 4))
+colnames(size_class_growth) <- size_class_names
 
-observed_quarters <- c(2,3,6,7)
-for(quarter in 1:3) {
+
+for(quarter in 1:(length(obs_quarters)-1)) {
   # Separating out population at the beginning of the inter-primary period (after an eradication primary period)
-  after_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_after_erad[observed_quarters[quarter]][[1]]
+  after_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_after_erad[obs_quarters[quarter]][[1]]
   # Separating out population at the end of the inter-primary period (before the next eradication primary period)
-  before_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_before_erad[observed_quarters[quarter+1]][[1]]
+  before_erad_pop <- erad_quarter_results$all_quarters_before_after_erad$pop_before_erad[obs_quarters[quarter+1]][[1]]
   # Adding size class column to both of the above data frames
   for(snake in 1:nrow(after_erad_pop)) {
     after_erad_pop$size_class[snake] <- size_class_fun(after_erad_pop$SVL[snake])
@@ -345,9 +349,10 @@ for(quarter in 1:3) {
   for(size in 1:length(size_class_names)) {
     size_after_pop <- after_erad_pop[after_erad_pop$size_class == size_class_names[size],]
     size_before_pop <- before_erad_pop[before_erad_pop$size_class == size_class_names[size],]
-    size_class_growth[size, quarter+1] <- nrow(size_before_pop)/nrow(size_after_pop)
+    size_class_growth[quarter, size] <- nrow(size_before_pop)/nrow(size_after_pop)
   }
 }
+
 
 
 # > size_class_growth
@@ -357,7 +362,13 @@ for(quarter in 1:3) {
 # 3      large       0.4386792       0.5328467       1.0204082
 # 4     xlarge       0.4341232       0.4797297       0.9807692
 
-# Except, r is constant across time steps (it's exponentiated by # days between eradication periods), so
-# this isn't quite right... how do I calculate that? Average it?
+# Since the number of days between quarters is the same for all inter-quarter periods, I can compare two
+# histograms - the mean r values from all 50 interations with the 5 real inter-quarter growth periods
+c1 <- rgb(173,216,230,max = 255, alpha = 80, names = "lt.blue")
+c2 <- rgb(255,192,203, max = 255, alpha = 80, names = "lt.pink")
 
+p1 <- hist(mean_outputs$r_values$xlarge^57, plot = FALSE)
+p2 <- hist(size_class_growth[,4], plot = FALSE)
+plot(p2, col = c1)
+plot(p1, col = c2, add = TRUE)
 
