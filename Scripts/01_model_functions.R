@@ -436,13 +436,13 @@ erad_timing_fun <- function(day,
   observed <- list()
   unobserved <- list()
   transect_encounter_pop <- list()
-  ###### Subsetting by day by method
-  day_transect_IDs <- list()
-  if(day_method_subset <- "on") {
-    for(method in 1:length(erad_method)
-   day_transect_IDs[[method]] <-  sample(transect_IDs, 
-                                         (erad_day_coverage[[method]]/erad_coverage$transects_per_quarter)*length(transect_IDs))
-  }
+  # ###### Subsetting by day by method
+  # day_transect_IDs <- list()
+  # if(day_method_subset <- "on") {
+  #   for(method in 1:length(erad_method)
+  #  day_transect_IDs[[method]] <-  sample(transect_IDs, 
+  #                                        (erad_day_coverage[[method]]/erad_coverage$transects_per_quarter)*length(transect_IDs))
+  # }
   ####### Subsetting by day, but with the same subset for all methods used
   # # Subset the susceptible populations by how much area can be covered in any given day by each method
   # day_transect_IDs <- sample(transect_IDs, 
@@ -450,8 +450,8 @@ erad_timing_fun <- function(day,
   # Separate out populations susceptible to transect & ADS methods 
   # transect_encounter_pop[[1]] <- pop[pop$ID %in% day_transect_IDs, ]
   
-  # ###### Original version, with quarter subset only 
-  # transect_encounter_pop[[1]] <- pop[pop$ID %in% transect_IDs, ]
+  ###### Original version, with quarter subset only
+  transect_encounter_pop[[1]] <- pop[pop$ID %in% transect_IDs, ]
   
   ADS_encounter_pop <- pop[pop$ID %in% ADS_IDs, ]
   # print(paste0("ADS encounters ", nrow(ADS_encounter_pop)))
