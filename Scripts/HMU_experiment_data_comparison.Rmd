@@ -1,0 +1,397 @@
+---
+title: "HMU Experiment Comparison"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+library(here)
+library(tictoc)
+library(fdrtool)
+library(jagsUI)
+library(scales)
+library(vctrs)
+library(stringr)
+library(readxl)
+
+source(here("Scripts/00_user_inputs.R"))
+source(here("Scripts/01_model_functions.R"))
+source(here("Scripts/02_results_functions.R"))
+source(here("Scripts/model_evaluation.R"))
+
+## Setting up plot colors to standardize across plots
+# Size class colors
+plot_colors <- list()
+plot_colors$size_class <- c(hue_pal()(4), "black")
+names(plot_colors$size_class) <- c(size_class_names, "unknown")
+```
+
+# Comparing HMU experimental data to IBM simulation results
+
+The HMU is 55 ha, in a roughly rectangular shape, with a maximum width of 480 m (according to statement of work). There are 65 planned transects across the entire area, spaced 20 m apart, but they only ended up using 13 transects over \~ 4 months due to Typhoon Mawar. Traps and bait tubes were alternated, spaced 20 m apart from each other on the transect (trap - 10 m - tube - 10 m - trap - 10 m - tube, etc.).
+
+They used a rolling wave of treatments, with 6 weeks of traps and bait tubes sequentially on each transect, with visual surveys occurring on the 1st, 6th and 11th weeks.
+
+```{r import_HMU_data}
+
+### Import HMU data
+# Trap effort data
+HMU_trap_data <- read_xlsx(here("Data", "HMU", "HMU_USDA_trap_data.xlsx"), sheet = "Trap Checks")
+# Trap snake capture data
+HMU_trap_capture_data <- read_xlsx(here("Data", "HMU", "HMU_USDA_trap_data.xlsx"), sheet = "Trap Captures")
+# Bait tube effort data
+HMU_bait_tube_data <- read_xlsx(here("Data", "HMU", "HMU_USDA_trap_data.xlsx"), sheet = "Tube Checks")
+# Visual survey effort & snake capture data
+HMU_vis_data <- read.csv(here("Data", "HMU", "HMU_USGS_VIS_survey_data.csv"))
+
+
+num_weeks <- length(unique(HMU_trap_data$setdate))
+# 16 weeks of data available; 1 quarter + 3 weeks
+
+# Converting the effort dates into numbered days, with the first setdate (2/6/23) acting as the first day of the first quarter
+
+HMU_trap_data$lastcheck <- as.Date(HMU_trap_data$lastcheck)
+trap_days <- vector()
+trap_days[1] <- 4
+for(i in 1:(length(unique(HMU_trap_data$lastcheck))-1)) {
+  trap_days[i+1] <- trap_days[i] + as.integer(unique(HMU_trap_data$lastcheck)[i+1] - unique(HMU_trap_data$lastcheck)[i])
+}
+
+HMU_bait_tube_data$checkdate <- as.Date(HMU_bait_tube_data$checkdate)
+bait_tube_days <- vector()
+bait_tube_days[1] <- trap_days[2]
+for(i in 1:(length(unique(HMU_bait_tube_data$checkdate))-1)) {
+  bait_tube_days[i+1] <- bait_tube_days[i] + as.integer(unique(HMU_bait_tube_data$checkdate)[i+1] - unique(HMU_bait_tube_data$checkdate)[i])
+}
+
+HMU_vis_data$effortdate <- as.Date(HMU_vis_data$effortdate)
+vis_days <- vector()
+vis_days[1] <- 1
+for(i in 1:(length(unique(HMU_vis_data$effortdate))-1)){
+  vis_days[i+1] <- vis_days[i] + as.integer(unique(HMU_vis_data$effortdate)[i+1] - unique(HMU_vis_data$effortdate)[i])
+}
+
+### Reformatting trap captured snake data 
+# Remove all NA row (not sure why its there)
+HMU_trap_capture_data <- HMU_trap_capture_data[-which(is.na(HMU_trap_capture_data$uid)),]
+# Splitting out capture IDs into its components (capture date, transect, trap, and the number of snakes found in the trap)
+HMU_trap_capture_data[c("capture_date", "transect", "trap", "snake_num")] <- str_split_fixed(HMU_trap_capture_data$uid, "-", 4)
+HMU_trap_capture_data$capture_date <- as.Date(HMU_trap_capture_data$capture_date, format = "%Y%m%d")
+# Numbering days relative to 2/6/23 (day 1)
+HMU_trap_capture_data$numbered_day <- 0
+HMU_trap_capture_data$numbered_day[1] <- 4
+for(i in 2:nrow(HMU_trap_capture_data)) {
+  HMU_trap_capture_data$numbered_day[i] <- HMU_trap_capture_data$numbered_day[i-1] + as.integer(HMU_trap_capture_data$capture_date[i] - HMU_trap_capture_data$capture_date[i-1])
+}
+# Adding size class
+HMU_trap_capture_data$`svl (mm)` <- as.numeric(HMU_trap_capture_data$`svl (mm)`)
+HMU_trap_capture_data$size_class <- NA
+for(i in 1:nrow(HMU_trap_capture_data)) {
+  if(is.na(HMU_trap_capture_data$`svl (mm)`[i]) != TRUE) {
+    HMU_trap_capture_data$size_class[i] <- size_class_fun(HMU_trap_capture_data$`svl (mm)`[i])
+  } else {
+    HMU_trap_capture_data$size_class[i] <- "unknown"
+  }
+}
+HMU_trap_capture_data$size_class <- factor(HMU_trap_capture_data$size_class, levels = c(size_class_names, "unknown"))
+# Adding quarter 
+HMU_trap_capture_data$Quarter <- 0
+for(i in 1:nrow(HMU_trap_capture_data)) {
+  if(HMU_trap_capture_data$numbered_day[i] <= 91) {
+    HMU_trap_capture_data$Quarter[i] <- 1
+  } else {
+    HMU_trap_capture_data$Quarter[i] <- 2
+  }
+}
+
+# Separating out visual captured data and adding columns for numbered days (with 2/6/23 as day 1), size class, and quarter
+HMU_vis_capture_data <- HMU_vis_data[HMU_vis_data$bts != 0,]
+# Numbering days relative to 2/6/23 (day 1)
+HMU_vis_capture_data$numbered_day <- 0
+HMU_vis_capture_data$numbered_day[1] <- 1
+for(i in 2:nrow(HMU_vis_capture_data)) {
+  HMU_vis_capture_data$numbered_day[i] <- HMU_vis_capture_data$numbered_day[i-1] + as.integer(HMU_vis_capture_data$effortdate[i] - HMU_vis_capture_data$effortdate[i-1])
+}
+# Adding size class
+HMU_vis_capture_data$size_class <- NA
+for(i in 1:nrow(HMU_vis_capture_data)) {
+  HMU_vis_capture_data$size_class[i] <- size_class_fun(HMU_vis_capture_data$svl[i])
+}
+HMU_vis_capture_data$size_class <- factor(HMU_vis_capture_data$size_class, levels = c(size_class_names, "unknown"))
+# Adding quarter 
+HMU_vis_capture_data$Quarter <- 0
+for(i in 1:nrow(HMU_vis_capture_data)) {
+  if(HMU_vis_capture_data$numbered_day[i] <= 91) {
+    HMU_vis_capture_data$Quarter[i] <- 1
+  } else {
+    HMU_vis_capture_data$Quarter[i] <- 2
+  }
+}
+
+# Combining vis and trap capture data with numbered day, size class, and quarter to compare to IBM via plotting 
+# Adding method column to both dataframes in order to distinguish them
+HMU_vis_capture_data$method <- "visual"
+HMU_trap_capture_data$method <- "trap"
+all_HMU_observed <- HMU_vis_capture_data[c("numbered_day", "size_class", "Quarter", "method")]
+all_HMU_observed <- bind_rows(all_HMU_observed, HMU_trap_capture_data[c("numbered_day", "size_class", "Quarter", "method")])
+
+# Plotting all observed for the first quarter
+all_HMU_captures_plot <- ggplot(all_HMU_observed[all_HMU_observed$numbered_day <= 91,]) +
+  geom_bar(aes(fill = size_class, x = as.character(Quarter)), position = "dodge", stat = "count") +
+  scale_fill_manual(values = plot_colors$size_class) +
+  facet_wrap(vars(method)) +
+  theme_bw()
+
+
+```
+
+```{r simulation_model}
+
+# Parameters that may be changed or subject to sensitivity analysis or to simulate over
+
+# Set study/eradication area size (in ha), which dictates both K and the initial population
+area_size <- 55
+
+# Set carrying capacity for this population:
+K <- 60*area_size
+
+## For initial population, based on previous runs to find roughly eqiulibrium N and size distribution:
+N <- 50*area_size
+size_dist <- c(0.4, 0.1, 0.1, 0.4)
+
+# Growth probability (p_g)
+g_density_prob <- 0.75 
+
+# Number of quarters to generate - 1 year
+erad_quarter_time_step <- 2
+day_time_step <- 91
+
+# Quarters where eradication methods are used, and which days in that quarter:
+erad_quarters <- list()
+# erad_quarters$ADS <- # ask Shane and Amy when ADS occurred (it wasn't part of their experimental design, but it may have occurred)
+erad_quarters$visual <- c(1) # start with just the first 13 weeks
+erad_quarters$trap <- c(1)
+erad_quarters$bait_tube <- c(1)
+erad_days <- list()
+# erad_days$ADS <- 
+erad_days$visual <- vis_days[vis_days <= day_time_step]
+erad_days$trap <- trap_days[trap_days <= day_time_step]
+erad_days$bait_tube <- bait_tube_days[bait_tube_days <= day_time_step]
+
+# Number of teams for each of the transet-based methods
+num_teams <- list()
+num_teams$visual <- 1
+num_teams$trap <- 1
+num_teams$bait_tube <- 1
+
+# Coverage for each method in a quarter 
+num_transects <- 65
+erad_coverage <- list()
+erad_coverage$ADS <- 1 # for now, this stays in because daily_operations requires it - at some point fix this so it doesn't have to occur
+
+# Coverage for all transect methods
+erad_coverage$transects_per_quarter <- 15/num_transects
+# Daily coverage amounts for each transect-based method (number of transects that can be covered by day by one team)
+erad_coverage$visual <- 4
+erad_coverage$trap <- 6
+erad_coverage$bait_tube <- erad_coverage$trap*2
+
+# Overlap of ADS over transects
+ADS_overlap_on_transect <- 1 # i.e. total area coverage, by at least one method 
+
+
+```
+
+```{r run_IBM_once}
+
+# Running model 
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method = erad_methods)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+
+# Plotting observed removed snakes (captured through trapping and visual survey)
+observed_list <- erad_quarter_results$all_observed[unlist(lapply(erad_quarter_results$all_observed, length) != 0)]
+all_observed <- bind_rows(observed_list)
+for(snake in 1:nrow(all_observed)){
+  all_observed$size_category[snake] <- size_class_fun(all_observed$SVL[snake], 
+                                                      size_class_limits)
+}
+# Factoring size category column for graphing
+all_observed$size_category <- factor(all_observed$size_category, 
+                                     levels = c("small", "medium", "large", "xlarge"))
+
+# Scatter plot, SVL size on the y-axis, separated by quarter
+observed_plot_1 <- ggplot(all_observed, aes(x = day, y = SVL, color = method)) +
+  geom_jitter() +
+  theme_bw() +
+  facet_wrap("quarter")
+# Bar plot
+observed_plot_2 <- ggplot(all_observed, aes(fill = size_category, x = as.character(quarter))) +
+  geom_bar(position = "dodge") +
+  facet_wrap("method") +
+  theme_bw()
+
+# Plotting unobserved removed snakes (killed through ADS and bait tubes)
+unobserved_list <- erad_quarter_results$all_unobserved[unlist(lapply(erad_quarter_results$all_unobserved, length) != 0)]
+all_unobserved <- bind_rows(unobserved_list[c(1:3)])
+for(snake in 1:nrow(all_unobserved)){
+  all_unobserved$size_category[snake] <- size_class_fun(all_unobserved$SVL[snake], 
+                                                      size_class_limits)
+}
+# Factoring size category column for graphing
+all_unobserved$size_category <- factor(all_unobserved$size_category, 
+                                     levels = c("small", "medium", "large", "xlarge"))
+
+unobserved_plot_1 <- ggplot(all_unobserved , aes(x = day, y = SVL, color = method)) +
+  geom_jitter() +
+  theme_bw() +
+  facet_wrap("quarter")
+unobserved_plot_2 <- ggplot(all_unobserved, aes(fill = size_category, x = as.character(quarter))) +
+  geom_bar(position = "dodge") +
+  facet_wrap("method") +
+  theme_bw()
+```
+
+There were a total of 36 snakes captured in traps and 14 captured during visual surveys. The first run of the model returned 42 trap captures and 24 from visual survey, which is not incredibly far off. Run 100 and look at the mean and range of values, as well as the size class distribution of captures by each method.
+
+It would be interesting to see
+
+```{r IBM_size_dist_variants}
+
+# Number of replicates
+num_replicates <- 100
+
+# Size distribution variants
+size_dist_variants <- list()
+size_dist_variants[[1]] <- c(0.4, 0.1, 0.1, 0.4) # default - stable size dist in IBM at K
+size_dist_variants[[2]] <- c(1/4, 1/4, 1/4, 1/4) # equal distribution
+
+size_dist_variants[[3]] <- c(3/8, 2/8, 2/8, 1/8) # More small, less x-large
+size_dist_variants[[4]] <- c(3/8, 1/8, 2/8, 2/8) # More small, less medium
+size_dist_variants[[5]] <- c(3/8, 2/8, 1/8, 2/8) # More small, less large
+
+size_dist_variants[[6]] <- c(1/8, 3/8, 2/8, 2/8) # More medium, less small
+size_dist_variants[[7]] <- c(2/8, 3/8, 1/8, 2/8) # More medium, less large
+size_dist_variants[[8]] <- c(2/8, 3/8, 2/8, 1/8) # More medium, less x-large
+
+size_dist_variants[[9]] <- c(1/8, 2/8, 3/8, 2/8) # More large, less small
+size_dist_variants[[10]] <- c(2/8, 1/8, 3/8, 2/8) # More large, less medium
+size_dist_variants[[11]] <- c(2/8, 2/8, 3/8, 1/8) # More large, less x-large
+
+size_dist_variants[[12]] <- c(1/8, 2/8, 2/8, 3/8) # Mor x-large, less small
+size_dist_variants[[13]] <- c(2/8, 1/8, 2/8, 3/8) # Mor x-large, less medium
+size_dist_variants[[14]] <- c(2/8, 2/8, 1/8, 3/8) # Mor x-large, less large
+
+
+### Iterating over each size distribution * number of replicates (1,400 total replicates)
+# Using all of the parameters from single run above, except for size_dist which I'm replacing with each variant
+
+size_var_IBM_results <- list()
+for(size_var in 3:length(size_dist_variants)) {
+  size_dist <- size_dist_variants[[size_var]] 
+  size_var_IBM_results[[size_var]] <- list()
+  for(n in 1:num_replicates) {
+    # Running model 
+   size_var_IBM_results[[size_var]][[n]] <- quarter_operations(initial_N = N, 
+                                             initial_size_dist = size_dist, 
+                                             p_g = g_density_prob,
+                                             lambda = lambda,
+                                             total_quarters = erad_quarter_time_step,
+                                             total_days = day_time_step,
+                                             erad = "on",
+                                             erad_method = erad_methods)
+   print(paste0("replicate ", n, " complete"))
+  }
+  # Save each variant list
+  saveRDS(size_var_IBM_results[[size_var]], file = here("Results", "HMU", paste0("size_dist_var_", size_var, ".rds")))
+  print(paste0("size dist variant ", size_var, " complete"))
+}
+
+
+```
+
+```{r IBM_results}
+
+IBM_results_list <- readRDS(file = here("Results", "HMU", paste0("size_dist_var_", 1, ".rds")))
+
+all_observed_list <- list()
+for(rep in 1:num_replicates) {
+ rep_observed <- IBM_results_list[[rep]]$all_observed[unlist(lapply(IBM_results_list[[rep]]$all_observed, length) != 0)]
+ observed_list <- bind_rows(rep_observed)
+  for(snake in 1:nrow(observed_list)){
+    observed_list$size_category[snake] <- size_class_fun(observed_list$SVL[snake], size_class_limits)
+  }
+  # Factoring size category column for graphing
+  observed_list$size_category <- factor(observed_list$size_category, 
+                                       levels = c("small", "medium", "large", "xlarge"))
+  all_observed_list[[rep]] <- list()
+  observed_methods <- unique(observed_list$method)
+  for(method in 1:length(observed_methods)) {
+    all_observed_list[[rep]][[method]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2)) 
+    colnames(all_observed_list[[rep]][[method]]) <- c("size_class", "removed")
+    all_observed_list[[rep]][[method]]$size_class <- size_class_names
+    for(size in 1:length(size_class_names)) {
+      all_observed_list[[rep]][[method]]$removed[size] <- nrow(observed_list[observed_list$size_category == size_class_names[size] & observed_list$method == observed_methods[method], ])
+    }
+  }
+    names(all_observed_list[[rep]]) <- observed_methods
+}
+all_observed <- melt(all_observed_list, id.vars = colnames(all_observed_list[[1]][[1]]))
+colnames(all_observed)[c(3:4)] <- c("method", "rep")
+all_observed$rep <- paste0("replicate_", all_observed$rep)
+all_observed$quarter <- 1
+all_observed$source <- "simulated"
+
+all_observed$size_class <- factor(all_observed$size_class, levels = size_class_names)
+
+# Reformatting HMU data to plot with the IBM results
+HMU_observed <- list()
+for(method in 1:length(observed_methods)) {
+  HMU_observed[[method]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+  colnames(HMU_observed[[method]]) <- c("size_class", "removed")
+  HMU_observed[[method]]$size_class <- size_class_names
+  for(size in 1:length(size_class_names)) {
+    HMU_observed[[method]]$removed[size] <- nrow(all_HMU_observed[all_HMU_observed$Quarter == 1 & all_HMU_observed$size_class == size_class_names[size] & all_HMU_observed$method == observed_methods[method],])
+  }
+}
+names(HMU_observed) <- observed_methods
+
+all_HMU_summed <- melt(HMU_observed, id.vars = colnames(HMU_observed[[1]]))
+colnames(all_HMU_summed)[3] <- "method"
+all_HMU_summed$quarter <- 1
+all_HMU_summed$source <- "HMU_data"
+
+# Bar plot
+observed_plot <- ggplot() +
+  geom_violin(data = all_observed, aes(fill = size_class, y = removed, x = size_class)) +
+  geom_point(data = all_HMU_summed, aes(y = removed, x = size_class), size = 2, color = "black") +
+  facet_wrap("method") +
+  theme_bw() +
+  guides(fill = "none") +
+  labs(y = "Removed individuals", x = "Size class")
+ 
+ 
+ 
+  
+  
+  
+```
