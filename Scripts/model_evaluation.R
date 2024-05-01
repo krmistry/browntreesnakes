@@ -235,6 +235,17 @@ eval_metrics_fun <- function(simulation_quarter_data,
 #                             num_transects, 
 #                             num_teams, 
 #                             area_size)
-
-
-
+obs_quarters <- c(1:4)
+estimated_N_sum_list <- list()
+for(alt in 1:2) {
+  estimated_N_sum_list[[alt]] <- list()
+  for(variant in 1:50) {
+    alt_name <- paste0("alt_", alt)
+    var_name <- paste0("jags_output_", alt_name, "_var.", variant, ".rds")
+    # Read in variants' estimation model results
+    jags_output <- readRDS(here("Results", "scenario_1", var_name))
+    estimated_N_sum_list[[alt]][[variant]] <- estimated_N_sum_fun(jags_output, 
+                                                      obs_quarters)
+  }
+}
+saveRDS(estimated_N_sum_list, file = here("Results", "scenario_1", "all_estimated_N_sum_list.rds"))
