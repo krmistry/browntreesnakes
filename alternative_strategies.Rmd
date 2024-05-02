@@ -1,0 +1,472 @@
+---
+title: "Alternative Strategies"
+author: "Kelly Mistry"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(reshape2)
+library(ggplot2)
+library(dplyr)
+library(here)
+library(tictoc)
+library(fdrtool)
+library(jagsUI)
+library(scales)
+library(vctrs)
+
+source(here("Scripts/00_user_inputs.R"))
+source(here("Scripts/01_model_functions.R"))
+source(here("Scripts/02_results_functions.R"))
+
+##### Shared parameters 
+# Target area
+area_size <- 50
+# Carrying capacity
+K <- 60*area_size
+# Growth probability (p_g)
+g_density_prob <- 0.75 
+# Number of days in a quarter
+day_time_step <- 91
+
+```
+
+# Alternative management strategies
+
+Common elements of all strategies:
+
+-   All scenarios will be evaluated on probability of reaching each of these objectives (in the simulated population, not estimated):
+
+    -   Full eradication (0 snake/ha)
+
+    -   Reach and maintain 1 snake/ha total density 
+
+    -   Reach and maintain 1 snake/ha combined density for upper 3 size classes
+
+-   50 ha area
+
+    -   Assume rectangle with 220 m width; transects spaced 20 m apart, meaning total coverage would require \~113 transects
+
+-   There could be a range of spatial coverage for transect-based methods, to simulate areas where transects are not possible (25%, 50%, 75%, 100%) - this could be a feature of all scenarios (except the one that is ADS only)
+
+-   10 years maximum (could be less based on thresholds for some strategies)
+
+-   Introduced uncertainty for initial total population and initial size distribution
+
+    -   100 replicates for each combination
+
+#### Starting population permutations:
+
+In Phase I, Staci had 4 permutations of starting populations, with 2 different population sizes and 2 different size distributions. There was low population (\~11 snakes/ha) and normal population (\~22 snakes/ha), and more small snakes (42% of population \< 850 mm SVL) or more extra large snakes (42% of population \>= 1,150 mm SVL). I could do the same, although I'd prefer to have some more population levels. Maybe these:
+
+-   Population levels: low (11 snakes/ha), medium (22 snakes/ha) and high (50 snakes/ha - this is what I've been using).
+
+-   Size distributions: more small (42% small, 19.3% for the other 3), more extra large (42% extra large, 19.3% of the other three). Maybe just start with those two, and if I have time to do more model runs, I can do some more:
+
+    -   Fewer extra large (10% extra large, 30% in the other three), more small and medium (35% small and medium snakes, 15% large and extra large), and more large and extra-large (15% small and medium, 35% large and extra large)
+
+These permutations will have 100 replicates each with the same randomly selected values for the starting populations (and then there will be 100 run of each of those).
+
+```{r starting_pop_permutations}
+
+# Three different mean starting densities
+starting_density <- c("low" = 11, "medium" = 22, "high" = 44)
+starting_pop <- list()
+
+set.seed(818) # To keep the starting values consistent
+for(i in names(starting_density)) {
+  starting_pop[[i]] <- round(rnorm(100, starting_density[i]*area_size, 
+                             starting_density[i]*area_size*0.1))
+}
+
+# Two starting size distributions (could add more if there's time to run them)
+starting_size_dist <- list()
+starting_size_dist$more_small <- c(0.42, rep((1-0.42)/3,3))
+starting_size_dist$more_xlarge <- c(rep((1-0.42)/3,3), 0.42)
+
+
+```
+
+### Alternative strategies:
+
+1.  Suppression focus with no monitoring
+
+    -   Explores how the population performs when no monitoring is possible, for whatever reason. This is also the current approach being used in parts of Guam.
+
+    -   ADS low effort (1 treatment with 2 drops per quarter)
+
+    -   No thresholds, because no monitoring is occurring so there's nothing to respond to
+
+    -   Population is never estimated (again, no monitoring data)
+
+2.  Experimental approach with many thresholds
+
+    -   Similar to original HMU experiment in the starting point methods, with a lot of thresholds that might cause methods to be changed - this seems more likely to occur during an experiment, and less likely in a purely management scenario, where keeping methods more consistent through time might be more desirable.
+
+    -   The population is estimated as frequently as possible, every 2 quarters.
+
+    -   Starting methods: ADS: low effort (1 treatment) per quarter; Visual survey: medium effort (6 weeks, 2 teams) per quarter; Trap: medium effort (6 weeks) per quarter; Bait tubes: medium effort (6 weeks) per quarter
+
+    -   Threshold 1: estimated mean density is of upper size classes is 3 snake/ha combined
+
+        -   If met: in next 2 quarters, stop ADS, traps & bait tubes and double number of visual survey teams (5 weeks, 4 teams)
+
+    -   Threshold 2: estimated mean small size class density is increasing by \>=10%
+
+        -   If met: in next 2 quarters, double number of visual survey teams (5 weeks, 4 teams)
+
+    -   Threshold 3: estimated mean density of entire population is =\< 0 snakes/ha for at least 2 quarters
+
+        -   If met: stop all methods for 1 quarter, do 1 round of visual survey (5 weeks, 2 teams) in 2nd quarter.
+
+3.  Eradication focus without ADS
+
+    -   A strategy with no ADS but a high amount of transect-based effort, geared towards eradication with relatively little monitoring, as ADS is a little precarious and could disappear (company that provides the materials is not entirely solvent, it sounds like). The only threshold is also geared towards eradication, but only on one size class to see if that would be sufficient to signal if the reproductively active part of the population is nearing or reaching eradication (as opposed to making the threshold based on the entire population).
+
+    -   Starting methods: Visual survey: high effort (9 weeks, 2 teams) per quarter; Trap: high effort (9 weeks) per quarter; Bait tubes: high effort (9 weeks) per quarter. 3 weeks of each quarter is only visual & trap, no bait tubes, to allow for monitoring
+
+    -   Threshold 1: estimated mean density of extra-large size class is 0 for \>=2 quarters
+
+        -   If met: stop all methods for 2 quarters, do 1 round of low effort visual survey (2 weeks, 4 teams) in 4th quarter
+
+    -   Estimate population every 4 quarters
+
+4.  TBD
+
+5.  TBD
+
+### Strategy 1: Suppression focus without monitoring
+
+-   One treatment (2 drops) per quarter over entire area
+
+-   Run for 10 years
+
+-   I don't think it matters when in the quarter it happens - I'll just put it in the middle
+
+```{r strategy_1_setup}
+
+### Manually set IBM parameters
+# Target area in ha
+#area_size <- 50 
+# Carrying capacity
+#K <- 60*area_size
+# Initial total N 
+#N <- 50*area_size
+# Initial size distribution
+#size_dist <- c(0.4, 0.1, 0.1, 0.4)
+# Growth probability (p_g)
+#g_density_prob <- 0.75 
+# Number of quarters to generate - 10 years
+erad_quarter_time_step <- 4*10
+#day_time_step <- 91
+
+# Quarters where eradication methods are used, and which days in that quarter:
+erad_quarters <- list()
+erad_quarters$ADS <- c(1:erad_quarter_time_step)
+erad_days <- list()
+for(quarter in 1:erad_quarter_time_step) {
+  erad_days[[quarter]] <- list()
+  erad_days[[quarter]]$ADS <- c(45, 48)
+}
+names(erad_days) <- paste0("quarter_", erad_quarters$ADS)
+
+# Bounds of primary sampling period (since there is no monitoring, this doesn't matter but it's a required parameter for a function)
+primary_sampling_period <- c(0,0)
+
+# Coverage for each method in a quarter 
+erad_coverage <- list()
+erad_coverage$ADS <- 1
+# Transect coverage and overlap of ADS over transects - there aren't actually any transect methods so neither of these is relevant, but they are required parameters at the moment and its not a high priority to fix that, so keeping them in for now
+erad_coverage$transects_per_quarter <- 0
+ADS_overlap_on_transect <- 1 
+
+```
+
+```{r strategy_1_run_once}
+
+# Running model 
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method = names(erad_quarters),
+                                           erad_coverage = erad_coverage,
+                                           primary_sampling_period = primary_sampling_period,
+                                           erad_quarters = erad_quarters,
+                                           erad_days = erad_days)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+```
+
+Block to run the model once:
+
+```{r strategy_1_replicates}
+
+# Number of replicates for each starting pop permutation
+num_replicates <- 100
+
+
+for(P in 1:length(starting_density)) { # Starting pop permutation (low, medium or high)
+  # Timin the biggest loops
+  ptm <- proc.time()
+  N_reps <- starting_pop[[P]]
+  for(D in 1:length(starting_size_dist)) { # Starting size distribution permutation (more small or more large)
+    size_dist <- starting_size_dist[[D]]
+    for(variant in 1:length(N_reps)) { # Start running through the 100 starting pop variants for the selected permutation
+      replicates_strategy_one <- list()
+      N <- N_reps[variant]
+      for(n in 1:num_replicates) {
+          # Running model 
+         replicates_strategy_one[[n]] <- quarter_operations(initial_N = N, 
+                                                   initial_size_dist = size_dist, 
+                                                   p_g = g_density_prob,
+                                                   lambda = lambda,
+                                                   total_quarters = erad_quarter_time_step,
+                                                   total_days = day_time_step,
+                                                   erad = "on",
+                                                   erad_method = names(erad_quarters),
+                                                   erad_coverage = erad_coverage,
+                                                 primary_sampling_period = primary_sampling_period,
+                                                 erad_quarters = erad_quarters,
+                                                 erad_days = erad_days)
+         print(paste0("replicate ", n, " complete"))
+      } # End of replicates loop
+      # Save each variant list
+      saveRDS(replicates_strategy_one, file = here("Results", "alt_strategies", paste0("strategy_one_IBM_start_pop_",names(starting_pop)[P], "-", names(starting_size_dist)[D], "-var_", variant, ".rds")))
+      print(paste0("variant ", variant, " complete"))
+    } # End of variants loop
+    print(paste0("size_dist ", D, " complete"))
+  } # End of size distribution permutation loop
+  # Stop the clock
+  proc.time() - ptm
+  print(paste0("starting pop ", P, " complete"))
+} # End of starting pop permutation loop
+      
+
+
+
+
+# Reading results back in
+replicates_strategy_one <- readRDS(file = here("Results", "alt_strategies", paste0("strategy_one_IBM_start_pop_low-more_small-var_1.rds")))
+  
+### Reformat IBM results for plotting
+erad_plot_data_1 <- list()
+for(n in 1:num_replicates) {
+  erad_plot_data_1[[n]] <- list()
+  results <- replicates_strategy_one[[n]]$all_quarters
+  for(quarter in 1:erad_quarter_time_step) {
+    erad_plot_data_1[[n]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
+    colnames(erad_plot_data_1[[n]][[quarter]]) <- c("size_category", "N")
+    for(size in 1:length(size_class_names)) {
+      erad_plot_data_1[[n]][[quarter]][size, 1] <- size_class_names[size]
+      erad_plot_data_1[[n]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
+    }
+  }
+  names(erad_plot_data_1[[n]]) <- c(1:erad_quarter_time_step)
+}
+names(erad_plot_data_1) <- paste0("replicate", c(1:num_replicates))  
+
+erad_plot_data_melted_1 <- melt(erad_plot_data_1, id.vars = colnames(erad_plot_data_1[[1]][[1]]))
+colnames(erad_plot_data_melted_1)[c(3:4)] <- c("Quarter", "variant")
+erad_plot_data_melted_1$size_category <- factor(erad_plot_data_melted_1$size_category, levels = size_class_names)
+
+# erad_plot_data_melted_1$variant <- factor(erad_plot_data_melted_1$variant, levels = paste0("variant_", c(1:num_variants)))
+
+variants_plot_1 <- ggplot(erad_plot_data_melted_1, aes(x = as.numeric(Quarter), y = N, color = variant)) +
+  geom_path(aes(group = variant), show.legend = FALSE) +
+  geom_point(show.legend = FALSE) +
+  #geom_hline(yintercept = K) +
+  facet_wrap(vars(size_category)) +
+  theme_bw()
+
+```
+
+### Strategy 2: Experimental approach (medium to high effort with all methods, using many thresholds)
+
+-   Run for maximum of 10 years
+
+-   The population is estimated every 2 quarters, and evaluated to see if any thresholds are met or exceeded. If not, initial methods continue
+
+-   Initial methods: ADS: low effort (1 treatment) per quarter; Visual survey: medium effort (6 weeks, 2 teams) per quarter; Trap: medium effort (6 weeks) per quarter; Bait tubes: medium effort (6 weeks) per quarter
+
+-   Thresholds:
+
+    -   Estimated mean density is of upper size classes is \<= 3 snake/ha combined
+
+        -   If met: in next 2 quarters, stop ADS, traps & bait tubes and double number of visual survey teams to cover twice the area (6 weeks, 4 teams)
+
+    -   Estimated mean small size class density is increasing by \>=10%
+
+        -   If met: in next 2 quarters, double number of visual survey teams to cover twice the area (6 weeks, 4 teams), keeping other methods the same as initial
+
+    -   Estimated mean density of entire population is =\< 0 snakes/ha for at least 2 quarters
+
+        -   If met: stop all methods for 1 quarter, do 1 round of visual survey (6 weeks, 2 teams) in 2nd quarter.
+
+-   Transect details:
+
+    -   There are assumed to be 113 transects
+
+    -   I assume that one team can do a visual survey OR check traps on 4 transects in 1 night, and one team can check bait tubes on 8 transects in 1 night
+
+        -   This means that one team could survey or check traps on all transects in 29 days, or two teams could do it 15 days
+
+    -   Visual surveys occur every other day for 6 weeks (20 days)
+
+        -   This means that 2 teams are required to cover the entire area each quarter (some overlap could occur, but that wouldn't change the coverage parameter since 100% coverage is the maximum)
+
+            -   Going with 100% coverage with two teams for now
+
+    -   Traps are checked every 3rd day for the same 6 weeks (14 days)
+
+        -   Two teams could cover the whole area (with 1 night requiring checking 5 transects), or one team could cover 50% of the area each quarter
+
+            -   Going with 100% coverage with two teams for now (because I don't have method-specific spatial selection set up, although I could do that)
+
+    -   Bait tubes are checked every 3rd day for 6 weeks (different 6 weeks than the visual survey and trapping; 14 days)
+
+        -   Bait tubes are faster to check, so one team can check the entire area in each quarter
+
+```{r strategy_2_setup}
+
+### Manually set IBM parameters
+# Number of quarters to generate - 10 years
+erad_quarter_time_step <- 2
+
+# Methods for all evenatualities; starting, threshold 1, threshold 2 and threshold 3
+method_option_names <- c("initial", paste0("threshold_", c(1:3)))
+method_options <- list()
+for(option in 1:length(method_option_names)) {
+  method_options[[option]] <- list()
+}
+names(method_options) <- method_option_names
+
+# Identifying the methods that will be used under each of these conditions
+method_options$initial$methods <- erad_methods
+method_options$threshold_1$methods <- erad_methods[2]
+method_options$threshold_2$methods <- erad_methods
+method_options$threshold_3$methods <- erad_methods[2]
+
+## Quarters where eradication methods are used for each condition
+# All methods used in all quarters for first 3 conditions
+for(option in 1:3) {
+  method_options[[option]]$erad_quarters <- list()
+  for(method in method_options[[option]]$methods) {
+    method_options[[option]]$erad_quarters[[method]] <- c(1:erad_quarter_time_step)
+  }
+}
+# Condition 4 only has methods occurring in 2nd quarter
+method_options$threshold_3$erad_quarters <- 2
+
+## Days where eradication methods are used for each condition
+# Initial condition days
+method_options$initial$erad_days <- list()
+for(quarter in 1:erad_quarter_time_step) {
+  method_options$initial$erad_days[[quarter]] <- list()
+  # ADS: low effort (1 treatment) per quarter
+  method_options$initial$erad_days[[quarter]]$ADS <- c(45, 48)
+  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
+  method_options$initial$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
+  # Trap: medium effort (6 weeks) per quarter - checking traps every 3 days
+  method_options$initial$erad_days[[quarter]]$trap <- seq(2, (7*6 - 1), 3)
+  # Bait tubes: medium effort (6 weeks) per quarter
+  method_options$initial$erad_days[[quarter]]$bait_tube <- seq(7*6, (7*12 - 1), 3)
+}
+names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
+
+# Threshold 1 days (visual surveys only)
+method_options$threshold_1$erad_days <- list()
+for(quarter in 1:erad_quarter_time_step) {
+  method_options$threshold_1$erad_days[[quarter]] <- list()
+  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
+  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
+}
+names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
+
+# Threshold 2 days (same as initial - coverage is what expands)
+method_options$threshold_2$erad_days <- method_options$initial$erad_days
+
+# Threshold 3 days (no effort in 1st quarter)
+method_options$threshold_3$erad_days$quarter_1 <- list()
+method_options$threshold_3$erad_days$quarter_2 <- list()
+method_options$threshold_3$erad_days$quarter_2$visual <- method_options$initial$erad_days$quarter_2$visual
+
+
+# Bounds of primary sampling periods for each condition
+for(option in 1:length(method_options)) {
+  method_options[[option]]$primary_sampling_period <- c(2,(7*6 - 1))
+}
+
+
+## Coverage for each method in a quarter for each condition
+for(option in 1:length(method_options)) {
+  method_options[[option]]$erad_coverage <- list()
+  # overlap of ADS over transects (100%) is the same for all conditions
+  method_options[[option]]$ADS_overlap_on_transect <- 1 
+}
+# Initial condition coverage
+method_options$initial$erad_coverage$ADS <- 1
+# Transect coverage (~50%)
+method_options$initial$erad_coverage$transects_per_quarter <- 0.5
+
+# Threshold 1 condition coverage
+# Transect coverage (100% because effort is doubled) 
+method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
+
+# Threshold 2 condition coverage
+method_options$initial$erad_coverage$ADS <- 1
+# Transect coverage (100%)
+method_options$threshold_2$erad_coverage$transects_per_quarter <- 1
+
+# Threshold 3 condition coverage
+# Transect coverage (~50%)
+method_options$threshold_3$erad_coverage$transects_per_quarter <- 0.5
+
+```
+
+```{r strategy_2_run_once}
+
+# Initial total N 
+N <- 50*area_size
+# Initial size distribution
+size_dist <- c(0.4, 0.1, 0.1, 0.4)
+
+# Running IBM model with initial conditions
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method =  method_options$initial$methods,
+                                           erad_coverage = method_options$initial$erad_coverage,
+                                           primary_sampling_period = method_options$initial$primary_sampling_period,
+                                           erad_quarters = method_options$initial$erad_quarters,
+                                           erad_days = method_options$initial$erad_days)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+
+# Running estimation model 
+
+
+
+```
