@@ -127,13 +127,13 @@ model_validation_fun <- function(quarter_timeseries,
 ### into the estimation model
 
 all_observations_fun <- function(erad_results_ts,
-                                 #erad_days = erad_days[c(2:3)], # if more than one method, use c() in argument
-                                 #erad_quarters = erad_quarters[c(2:3)], # if more than one method, use c() in argument
+                                 all_days,
+                                 all_quarters,
                                  methods,
                                  num_methods) {
   # Create vectors with quarters and days when eradication occurred
-  all_quarters <- sort(unique(unlist(erad_quarters[methods])))
-  all_days <- sort(unique(unlist(erad_days[methods])))
+  # all_quarters <- sort(unique(unlist(erad_quarters[methods])))
+  # all_days <- sort(unique(unlist(erad_days[methods])))
   # Combine all observed (captured) snakes into one dataframe
   observed_list <- erad_results_ts$all_observed[unlist(lapply(erad_results_ts$all_observed, length) != 0)]
   # Remove empty lists from observed_list (when no snakes were found in a quarter)
@@ -346,9 +346,10 @@ true_vital_rates_v1_fun <- function(all_erad_quarters,
 
 estimated_N_plots <- function(jags_output,
                               erad_quarter_results,
-                              erad_quarters) {
+                              observed_erad_quarters) {
   # Separating out quarters with observable removals
-  observed_erad_quarters <- sort(unique(unlist(erad_quarters[c(2,3)])))
+  #observed_erad_quarters <- sort(unique(unlist(erad_quarters[c(2,3)])))
+  
   mean_N <- as.data.frame(matrix(0, nrow = Q, ncol = S))
   colnames(mean_N) <- size_class_names
   mean_N$Quarter <- observed_erad_quarters
