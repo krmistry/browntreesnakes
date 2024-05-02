@@ -78,7 +78,7 @@ num_transects$total <- 2260/20 # area width divided by distance between transect
 K <- 60*area_size
 
 ## For initial population, based on previous runs to find roughly eqiulibrium N and size distribution:
-N <- 50*area_size
+N <- 100*area_size
 size_dist <- c(0.4, 0.1, 0.1, 0.4)
 
 
@@ -96,10 +96,15 @@ erad_quarters$visual <- c(1:4)
 erad_quarters$trap <- c(1:4)
 erad_quarters$bait_tube <- c(1:4)
 erad_days <- list()
-erad_days$ADS <- c(7*1, 7*11, 7*12)
+erad_days$ADS <- c(7*8, 7*9, 7*10)
 erad_days$visual <- seq(2, (7*7 - 1), 1)
 erad_days$trap <- seq(2, (7*7 - 1), 2)
-erad_days$bait_tube <- seq(7*3, (7*10 - 1), 2)
+erad_days$bait_tube <- seq(7*7, 7*13, 2)
+
+# Coverage for each method 
+erad_coverage <- list()
+erad_coverage$ADS <- 1
+erad_coverage$visual <- 28/113 # think about this later - 28 transects total are touched in a quarter, but only 4 are walked in a day...
 
 # scenario_cost <- list()
 # scenario_cost$alt_1 <- cost_function(methods = names(erad_quarters), 
@@ -109,10 +114,7 @@ erad_days$bait_tube <- seq(7*3, (7*10 - 1), 2)
 #               num_teams, 
 #               area_size)
 
-# Coverage for each method in a quarter 
-erad_coverage <- list()
-erad_coverage$ADS <- 1
-erad_coverage$visual <- 28/113
+
 erad_coverage$trap <- 28/113
 erad_coverage$bait_tube <- 28/113
 # Overlap of ADS over transects
@@ -141,12 +143,11 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
 To incorporate uncertainty into these results, initial N values will come from 100 draws from a normal distribution, currently with mean of 100 and SD of 10 (multiplied by the area size). I'll then take all of these results, and put them through the estimation model...I guess? What do I want to know about these results first though. Maybe the mean of impact (like, percentage decreased within the year), and some measurement of variance, from the eradication regime? In terms of total N, as well as N for each size class.
 
 ```{r alternative_1_variants}
+# Number of variants for looping
+num_variants <- 50
 
 # Incorporating uncertainty about the starting population by simulating a range of values - 50 iterations for presentation results
-N_list <- round(rnorm(50, 100, 10))*area_size
-
-# Number of variants for looping
-num_variants <- length(N_list)
+N_list <- round(rnorm(num_variants, 100, 10))*area_size
 
 # List of quarter results
 erad_results_list <- list()
@@ -305,7 +306,7 @@ sink()
 ```{r alternative_1_estimation}
 
 # Reading in IBM results, if needed
-erad_results_list <- readRDS(file = here("Results", "scenario_1", "IBM_outputs_25.RDS"))
+erad_results_list <- readRDS(file = here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
 
 # Quarters with observations
 obs_methods <- erad_methods[c(2:3)]
@@ -333,15 +334,15 @@ N_prior <- 50*area_size
 parameters <- c("N", "N.sum", "p")
 
 # MCMC settings
-nb <- 20000
 nt <- 1
+nb <- 20000
 ni <- 50000 + nb
 nc <- 3
 
-# List to capture jags output (not saving parameters because of space)
+# List to capture jags output
 jags_output_list <- list()
 
-for(variant in 11:15) {
+for(variant in 1:10) {
   # Reformat simulation results
   erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list[[variant]],
                                               methods = obs_methods)
@@ -362,7 +363,7 @@ for(variant in 11:15) {
     N.base[k,1,1] <- sum(Y[k,,1:Q])
   }
   
-  # initialize D to > than the number that will be removed in the following year
+  # initialize D to > than the number that will be removed in the following years
   Y.remove1 <- vector()
   Y.remove2 <- vector()
   Y.remove3 <- vector()
@@ -410,23 +411,14 @@ for(variant in 11:15) {
                                 n.thin = nt, 
                                 n.iter = ni,
                                 n.burnin = nb)
+  # Save the output
+  saveRDS(jags_output_list[[variant]], file = paste0(here("Results", "scenario_1"), "/jags_output_alt_1_var.", variant, ".rds"))
   
   print(paste0("iteration ", variant))
 }
 
-saveRDS(jags_output_list, file = here("Results" , "scenario_1", "jags_output_list_11-15.rds"))
-# Constructing results lists - memory limit issues, so had to do this piecemeal
-jags_1 <- readRDS(file = here("Results" , "scenario_1", "jags_output_list_1-5.rds"))
-jags_2 <- readRDS(file = here("Results" , "scenario_1", "jags_output_list_6-10.rds"))
-jags_2 <- jags_2[c(6:10)]
-jags_outputs_10_list <- c(jags_1, jags_2) 
-remove(jags_1)
-remove(jags_2)
-jags_3 <- readRDS(file = here("Results" , "scenario_1", "jags_output_list_11-15.rds"))
-jags_3 <- jags_3[c(11:15)]
-jags_outputs_15_list <- c(jags_outputs_10_list, jags_3) 
-remove(jags_3)
-remove(jags_outputs_10_list)
+saveRDS(jags_output_list, file = here("Results" , "scenario_1", "jags_output_alt_1_50.rds"))
+
 
 jags_outputs_1_list <- readRDS("/Users/kellymistry/Large_data_files/brown_treesnakes/scenario_1_results/jags_output_alt_1_50.RDS")
 
@@ -439,6 +431,24 @@ est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_outputs
 }
 
 ```
+
+```{r alternative_1_metrics}
+IBM_results <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_1_50.RDS"))
+
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
+
+model_metrics <- list()
+for(variant in 1:num_variants) {
+  var_name <- paste0("jags_output_alt_1_var.", variant, ".rds")
+  # Read in variants' estimation model results
+  jags_output <- readRDS(here("Results", "scenario_1", var_name))
+  model_metrics[[variant]] <- eval_metrics_fun(IBM_results[[variant]],                                       jags_output, obs_quarters)
+}
+
+
+```
+
+
 
 ```{r estimation_test}
 erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list[[1]],
@@ -643,10 +653,10 @@ effort_erad_methods$visual <- 4*2*num_teams$visual
 area_size <- 50 # increase to 50 for real runs, this is just to get everything working quicker
 
 # Set carrying capacity for this population:
-K <- 60*area_size
+K <- (119/2)*area_size
 
 ## For initial population, based on previous runs to find roughly eqiulibrium N and size distribution:
-N <- 50*area_size
+N <- 100*area_size
 size_dist <- c(0.4, 0.1, 0.1, 0.4)
 
 
@@ -669,7 +679,8 @@ erad_days$visual <- c((7*11):(7*13-1))
 # Coverage for each method (totally arbitrary, adjust later)
 erad_coverage <- list()
 erad_coverage$ADS <- 1
-erad_coverage$visual <- (4*num_teams$visual)/113
+erad_coverage$visual <- 1
+
 
 # Overlap of ADS over transects
 ADS_overlap_on_transect <- 1 # i.e. total area coverage, by at least one method 
@@ -700,12 +711,13 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
 num_variants <- 50
 
 # Incorporating uncertainty about the starting population by simulating a range of values
-N_list <- round(rnorm(n_inter, 50, 10))*area_size
+N_list <- round(rnorm(num_variants, 100, 10))*area_size
+
 
 # List of quarter results
 erad_results_list <- list()
 
-for(variant in 1:n_inter) {
+for(variant in 1:num_variants) {
   # Running model 
   erad_results_list[[variant]] <- quarter_operations(initial_N = N_list[variant], 
                                            initial_size_dist = size_dist, 
@@ -724,7 +736,7 @@ for(variant in 1:n_inter) {
 erad_results_list_2 <- readRDS("/Users/kellymistry/Large_data_files/brown_treesnakes/scenario_1_results/IBM_outputs_alt_2_50.RDS")
 
 erad_plot_data_2 <- list()
-for(variant in 1:n_inter) {
+for(variant in 1:num_variants) {
   erad_plot_data_2[[variant]] <- list()
   results <- erad_results_list_2[[variant]]$all_quarters
   for(quarter in 1:erad_quarter_time_step) {
@@ -737,7 +749,7 @@ for(variant in 1:n_inter) {
   }
   names(erad_plot_data_2[[variant]]) <- c(1:4)
 }
-names(erad_plot_data_2) <- paste0("variant_", c(1:n_inter))  
+names(erad_plot_data_2) <- paste0("variant_", c(1:num_variants))  
 
 erad_plot_data_melted_2 <- melt(erad_plot_data_2, id.vars = colnames(erad_plot_data_2[[1]][[1]]))
 colnames(erad_plot_data_melted_2)[c(3:4)] <- c("Quarter", "variant")
@@ -755,20 +767,111 @@ variants_plot_2 <- ggplot(erad_plot_data_melted_2, aes(x = Quarter, y = N, color
 
 ```
 
-```{r alt_2_estimation}
 
+
+```{r jags_model_1_method}
+
+# JAGS Removal Estimation Model - simple growth version 
+sink("removal_model_simple_1_method.jags")
+cat("
+model {
+
+# Set up first row of N
+for(k in 1:S) {
+  p.miss[1,k,1:N_prior] <- rep(1/N_prior,N_prior)
+  miss[1,k] ~ dcat(p.miss[1,k,1:N_prior])
+  N[k,1,1] <-  N.base[k,1,1] + miss[1,k]
+}
+
+# Parameter priors
+
+for(k in 1:S) {
+  beta.p[k] ~ dunif(0, 10)
+  alpha.p[k] ~ dunif(0, 10)
+}
+
+# Growth per size class priors
+r1 ~ dgamma(1,0.3) # growth for small size class
+r2 ~ dgamma(1,0.3) # growth for medium size class
+r3 ~ dgamma(1,0.3) # growth for large size class
+r4 ~ dgamma(1,0.3) # growth for xlarge size class
+
+
+
+# Transition matrix (used for population size class growth & reproduction between primary sampling periods)
+for(t in 1:(Q-1)){
+  P[1,1,t] <- r1^days_btwn[t]
+  P[1,2,t] <- 0
+  P[1,3,t] <- 0
+  P[1,4,t] <- 0
+  P[2,1,t] <- 0
+  P[2,2,t] <- r2^days_btwn[t]
+  P[2,3,t] <- 0
+  P[2,4,t] <- 0
+  P[3,1,t] <- 0
+  P[3,2,t] <- 0
+  P[3,3,t] <- r3^days_btwn[t]
+  P[3,4,t] <- 0
+  P[4,1,t] <- 0
+  P[4,2,t] <- 0
+  P[4,3,t] <- 0
+  P[4,4,t] <- r4^days_btwn[t]
+}
+
+
+for(t in 1:Q) { # start primary sampling period loop  
+  for(k in 1:S) { # start size class loop
+      for(i in 1:I) { # start secondary sampling instances loop
+      # Calculate encounter probability for each method, secondary sampling instance and primary sampling period
+      # Odd columns are visual, even columns are trap
+        # logit(p[k,i,t]) <- alpha.p[k,i] + beta.p[k,i] * log(xi[i,t])
+      #***** version below runs, but is not method specific *****
+        logit(p[k,i,t]) <- alpha.p[k] + beta.p[k] * log(xi[i,t]) # effort is not size-dependent
+      # Calculate removals based on encounter probability and M (population in within i instance)
+        Y[k,i,t] ~ dbin(p[k,i,t],N[k,i,t])
+      # Calculate N using last time step N minus summed removals
+        N[k,i+1,t] <- N[k,i,t] - Y[k,i,t]
+      } # end secondary sampling instances loop
+  # Calculate remaining population at the end of the primary sampling period
+    R[k,t] <- N[k,I,t] - Y[k,I,t]
+  } # end size class loop
+} # end primary sampling period loop
+
+for (t in 1:(Q-1)) { # start operations between primary sampling period loop
+  # Calculate population at beginning of primary sampling period using remaining population from the end of previous sampling period X transition matrix
+    D[1,t] ~ dpois(R[1,t]*P[1,1,t])
+    D[2,t] ~ dpois(R[2,t]*P[2,2,t])
+    D[3,t] ~ dpois(R[3,t]*P[3,3,t])
+    D[4,t] ~ dpois(R[4,t]*P[4,4,t])
+    # Set up first sampling instance of next primary sampling period
+    for(k in 1:S){ # start size class loop
+      N[k,1,t+1] <- D[k,t]
+    } # end size class loop
+} # end between primary sampling period loop
+
+for(t in 1:Q) { #start primary sampling period loop
+  # Summing all size classes into a single N for each primary sampling period
+  N.sum[t] <- sum(N[,1,t])
+} # end primary sampling period loop
+
+} # end model
+", fill= TRUE)
+sink()
+```
+
+
+```{r alternative_2_estimation}
+
+
+# # Reading in IBM results, if needed
+# erad_results_list <- readRDS(file = here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
 
 # Quarters with observations
-# With two methods:
-#obs_methods <- erad_methods[c(2:3)]
-# With one method: 
 obs_methods <- erad_methods[2]
 # Values needed for array dimensions & loops
 S <- length(size_class_names) # number of size classes
 Q <- length(unique(unlist(erad_quarters[obs_methods]))) # Primary sampling periods (quarters)
-# When two methods are used, I is double the length of sampling days:
-#I <- rep(max(length(erad_days[[obs_methods[1]]]), length(erad_days[[obs_methods[2]]]))*2, Q)
-# With only one method, I is just the max number of days for that method:
+
 I <- rep(length(erad_days[[obs_methods]]), Q)
 # Secondary sampling periods (days within each quarter) - redo this later, once I re-do how erad_days is formatted to allow it to vary between quarters
 
@@ -791,17 +894,17 @@ N_prior <- 50*area_size
 parameters <- c("N", "N.sum", "p")
 
 # MCMC settings
-nb <- 10000
 nt <- 1
-ni <- 20000 + nb
+nb <- 20000
+ni <- 50000 + nb
 nc <- 3
 
-# List to capture jags output (not saving parameters because of space)
+# List to capture jags output
 jags_output_list <- list()
 
-for(variant in 1:1) {
+for(variant in 31:50) {
   # Reformat simulation results
-  erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list[[variant]],
+  erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list_2[[variant]],
                                               methods = obs_methods)
   # Isolate observations and effort per day
   removals_array_v2 <- array(dim = c(S, I[1], Q))
@@ -820,7 +923,7 @@ for(variant in 1:1) {
     N.base[k,1,1] <- sum(Y[k,,1:Q])
   }
   
-  # initialize D to > than the number that will be removed in the following year
+  # initialize D to > than the number that will be removed in the following years
   Y.remove1 <- vector()
   Y.remove2 <- vector()
   Y.remove3 <- vector()
@@ -863,30 +966,55 @@ for(variant in 1:1) {
   jags_output_list[[variant]] <- jags(data, 
                                 inits, 
                                 parameters, 
-                                "removal_model_simple.jags", 
+                                "removal_model_simple_1_method.jags", 
                                 n.chains = nc, 
                                 n.thin = nt, 
                                 n.iter = ni,
                                 n.burnin = nb)
   
+  saveRDS(jags_output_list[[variant]], file = paste0(here("Results", "scenario_1"), "/jags_output_alt_2_var.", variant, ".rds"))
+  
   print(paste0("iteration ", variant))
 }
 
-saveRDS(jags_output_list, file = here("Results" , "scenario_1", "jags_output_list_11-15.rds"))
+# Saving outputs
+# saveRDS(jags_output_list, file = here("Results" , "scenario_1", "jags_output_alt_2_50.rds"))
 
-
-
-jags_outputs_1_list <- readRDS("/Users/kellymistry/Large_data_files/brown_treesnakes/scenario_1_results/jags_output_alt_1_50.RDS")
+# Reading in outputs
+jags_output_2_list <- readRDS(here("Results" , "scenario_1", "jags_output_alt_2_50.rds"))
 
 est_v_sim_N_plot_list <- list()
-for(variant in 1:1) {
+for(variant in 1:num_variants) {
   # Mean N estimates vs simulated real N
-est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_output_list[[variant]],
-                       erad_quarter_results = erad_results_list[[variant]],
+est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_output_2_list[[variant]],
+                       erad_quarter_results = erad_results_list_2[[variant]],
                        erad_quarters = erad_quarters)
 }
 
 ```
+
+
+
+```{r alternative_2_metrics}
+
+IBM_results <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
+
+obs_quarters <- unique(unlist(erad_quarters[obs_methods]))
+
+model_metrics <- list()
+for(variant in 1:num_variants) {
+  var_name <- paste0("jags_output_alt_2_var.", variant, ".rds")
+  # Read in variants' estimation model results
+  jags_output <- readRDS(here("Results", "scenario_1", var_name))
+  model_metrics[[variant]] <- eval_metrics_fun(IBM_results[[variant]],                                       jags_output, obs_quarters)
+}
+
+saveRDS(model_metrics, file = here("Results", "scenario_1", "alt_2_model_metrics_1.rds"))
+
+
+```
+
+
 
 ```{r model_metrics_fun}
 
@@ -1008,6 +1136,8 @@ threshold_fun <- function(threshold,
   
 
 ```
+
+
 
 #### Cost calculation for each scenario
 
@@ -2273,3 +2403,8 @@ effort_plot_2 <- ggplot(all_effort, aes(fill = method, x = week)) +
   theme_bw()
 
 ```
+
+
+
+
+

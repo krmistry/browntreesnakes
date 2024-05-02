@@ -2,6 +2,7 @@
 
 # obs_quarters <- unique(unlist(erad_quarters[erad_methods[c(2,3)]]))
 
+
 # Function to summarize simulation data into size class N for each quarter
 summed_sim_data_fun <- function(simulation_quarter_data,
                                 obs_quarters) {
@@ -23,8 +24,10 @@ summed_sim_data_fun <- function(simulation_quarter_data,
   return(real_data_summed)
 }
 
+
 # # Test
 # summed_data <- summed_sim_data_fun(erad_quarter_results)
+
 
 
 # Function to separate (and sum when appropriate) estimated values - mean N, SD of N, and credible intervals for 95th percentile
@@ -35,6 +38,7 @@ summed_est_results_fun <- function(output_jags,
   sd_jags_output <- output_jags$sd$N
   estimated_N_95_CI_lower <- output_jags$q2.5$N
   estimated_N_95_CI_upper <- output_jags$q97.5$N
+
   # Setting up dataframe to hold estimated mean N values for each quarter and size
   estimated_N <- as.data.frame(matrix(NA, ncol = (length(size_class_names)+2), 
                                     nrow = length(obs_quarters)))
@@ -60,8 +64,10 @@ summed_est_results_fun <- function(output_jags,
          estimated_N_95_CI_upper = estimated_N_95_CI_upper))
 }
 
+
 # # Test
 # summed_results <- summed_est_results_fun(output_jags, obs_quarters)
+
 
 
 ### Function to calculate:
@@ -92,6 +98,7 @@ accuracy_metrics_fun <- function(real_data,
   return(list(RMSE = RMSE, PRD = PRD))
 }
 
+
 # # Test
 # accuracy_metrics <- accuracy_metrics_fun(summed_data,
 #                                          summed_results$estimated_N,
@@ -109,17 +116,27 @@ percent_CV_fun <- function(estimated_N_sd,
   
   y3 <- list()
   percent_CV <- list()
+  length_CV <- list()
   for(size in 1:length(size_class_names)) {
     y3[[size]] <- vector()
     for(i in 1:length(obs_quarters)) {
-      y3[[size]][i] <- estimated_N_sd[i,size+1]/estimated_N[i,size+1]
+      if(estimated_N[i,size+1] > 0) {
+        y3[[size]][i] <- estimated_N_sd[i,size+1]/estimated_N[i,size+1]
+    } else {
+        y3[[size]][i] <- NA
+      }
     }
+    y3[[size]] <- y3[[size]][!is.na(y3[[size]])]
+    length_CV[[size]] <- length(y3[[size]])/length(obs_quarters)
     percent_CV[[size]] <- mean(y3[[size]])*100
   }
   names(percent_CV) <- size_class_names
+  names(length_CV) <- size_class_names
   
-  return(percent_CV)
+  return(list(percent_CV = percent_CV,
+         length_CV = length_CV))
 }
+
 
 # # Test
 # percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, 
@@ -136,8 +153,8 @@ coverage_fun <- function(lower_CI,
   for(size in 1:length(size_class_names)) {
     y4[[size]] <- vector()
     for(quarter in 1:length(obs_quarters)) {
-      if(real_data[quarter, size+1] > estimated_N_95_CI_lower[size, 1, quarter] & 
-         real_data[quarter, size+1] < estimated_N_95_CI_upper[size, 1, quarter]) {
+      if(real_data[quarter, size+1] > lower_CI[size, 1, quarter] & 
+         real_data[quarter, size+1] < upper_CI[size, 1, quarter]) {
         y4[[size]][quarter] <- 1
       } else {
         y4[[size]][quarter] <- 0
@@ -156,11 +173,34 @@ coverage_fun <- function(lower_CI,
   return(coverage)
 }
 
+
 # # Test
 # coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
 #                          summed_results$estimated_N_95_CI_upper,
 #                          obs_quarters, real_data_summed)
 
+estimated_N_sum_fun <- function(output_jags,
+                                obs_quarters) {
+  # Separating relevant raw results - mean and 95% CI of N
+  N_sum_jags_output <- output_jags$mean$N.sum
+  estimated_N_sum_95_CI_lower <- output_jags$q2.5$N.sum
+  estimated_N_sum_95_CI_upper <- output_jags$q97.5$N.sum
+  # Setting up dataframe to hold estimated mean and CIs N.sum values for each quarter
+  estimated_N_sum <- as.data.frame(matrix(NA, ncol = 3, 
+                                          nrow = length(obs_quarters)))
+  colnames(estimated_N_sum) <- c("N", "CI_95_lower", "CI_95_upper")
+  
+  for(quarter in 1:length(obs_quarters)) {
+    estimated_N_sum$N[quarter] <-  N_sum_jags_output[quarter]
+    estimated_N_sum$CI_95_lower[quarter] <- estimated_N_sum_95_CI_lower[quarter]
+    estimated_N_sum$CI_95_upper[quarter] <- estimated_N_sum_95_CI_upper[quarter]
+  }
+  
+  return(estimated_N_sum = estimated_N_sum)
+}
+
+# # Test
+# test <- estimated_N_sum_fun(output_jags, c(1:4))
 
 ### Putting all of the above functions together to produce a single list of accuracy metrics for
 ### a single model run
@@ -169,9 +209,10 @@ eval_metrics_fun <- function(simulation_quarter_data,
                              output_jags,
                              obs_quarters) {
   # Format simulation data
-  summed_data <- summed_sim_data_fun(erad_quarter_results)
+  summed_data <- summed_sim_data_fun(simulation_quarter_data)
   # Format estimation results
   summed_results <- summed_est_results_fun(output_jags, obs_quarters)
+  summed_results_total_N <- estimated_N_sum_fun(output_jags, obs_quarters)
   # Calculate accuracy metrics, RMSE and percent relative difference
   accuracy_metrics <- accuracy_metrics_fun(summed_data,
                                            summed_results$estimated_N,
@@ -183,18 +224,39 @@ eval_metrics_fun <- function(simulation_quarter_data,
   # Calculate coverage
   coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
                            summed_results$estimated_N_95_CI_upper,
-                           obs_quarters, real_data_summed)
+                           obs_quarters, summed_data)
   
   return(list(accuracy_metrics = accuracy_metrics,
               percent_CV = percent_CV,
               coverage = coverage,
-              summed_results = summed_results))
+              summed_results = summed_results,
+              summed_results_total_N = summed_results_total_N,
+              summed_data = summed_data))
 }
 
 # # Test
 # model_metrics <- eval_metrics_fun(erad_quarter_results,
 #                                   output_jags,
 #                                   unique(unlist(erad_quarters[erad_methods[c(2,3)]])))
-
-
+# 
+# model_cost <- cost_function(methods = names(erad_quarters), 
+#                             erad_days, 
+#                             erad_quarters, 
+#                             num_transects, 
+#                             num_teams, 
+#                             area_size)
+obs_quarters <- c(1:4)
+estimated_N_sum_list <- list()
+for(alt in 1:2) {
+  estimated_N_sum_list[[alt]] <- list()
+  for(variant in 1:50) {
+    alt_name <- paste0("alt_", alt)
+    var_name <- paste0("jags_output_", alt_name, "_var.", variant, ".rds")
+    # Read in variants' estimation model results
+    jags_output <- readRDS(here("Results", "scenario_1", var_name))
+    estimated_N_sum_list[[alt]][[variant]] <- estimated_N_sum_fun(jags_output, 
+                                                      obs_quarters)
+  }
+}
+saveRDS(estimated_N_sum_list, file = here("Results", "scenario_1", "all_estimated_N_sum_list.rds"))
 
