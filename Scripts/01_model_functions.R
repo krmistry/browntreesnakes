@@ -1132,14 +1132,14 @@ quarter_operations <- function(initial_N,
         moms <- repro_females_fun(start_pop = quarter_timeseries_pop[[quarter]],
                                   density_prob = r_density_prob)
     }
-     print(paste0("moms ", nrow(moms)))
+     #print(paste0("moms ", nrow(moms)))
     # If there are females reproducing this quarter, then create offspring (if not, don't)
     if(nrow(moms) > 0) {
       # Producing new offspring to join population at the end of the quarter
       offspring <- gen_offspring_fun(mom_pop = moms,
                                      time_step = quarter,
                                      offspring_lambda = lambda)
-      print(str(offspring))
+      #print(str(offspring))
       # Keeping track of which females reproduced in which quarters (next step will be to use     this to exclude females who've reproduced in the last 2 quarters)
       repro_females_timeseries[[quarter]] <- moms
     } else { # Create empty dataframes with the right column names for offspring and reproducing females lists if no reproducing females in this quarter
