@@ -189,14 +189,14 @@ names(gompertz_asymptotes) <- tau
 
 # Creating the gompertz growth function:
 
-daily_gompertz_growth_fun <- function(snake, 
+daily_gompertz_growth_fun_2 <- function(snake, 
                                       density_prob,
                                       gompertz_coefs) {
    if (rbinom(1, 1, prob = density_prob) == 1) {
      # Selecting correct growth coefficients based on sex and growth quantile
      growth_coefs <- gompertz_coefficients[[snake$growth_quant]][snake$sex]
      # Snake grows
-     snake$SVL <- snake$SVL + growth_coefs[1,] + growth_coefs[2,]*log(snake$SVL/700)
+     snake$SVL <- snake$SVL*exp(growth_coefs[1,]/365 + (growth_coefs[2,]/365)*log(snake$SVL/700))
    } else {
      snake$SVL <- snake$SVL
    }
@@ -206,37 +206,43 @@ daily_gompertz_growth_fun <- function(snake,
 # Plotting the trajectory of each of the growth trajectories:
 growth_curves <- list()
 # Female growth curves
-growth_curves$Females <- as.data.frame(matrix(NA, nrow = 20*365, ncol = 6))
+growth_curves$Females <- as.data.frame(matrix(NA, nrow = 10*365, ncol = 6))
 colnames(growth_curves$Females) <- c("Day", "25th", "50th", "75th", "90th", "95th")
-growth_curves$Females$Day <- c(1:(20*365))
+growth_curves$Females$Day <- c(1:(10*365))
 growth_curves$Females[1, -1] <- 350
 for(t in 1:length(tau)) {
   coefs <- gompertz_coefficients[[t]]$F
-  for(day in 2:(20*365)){
-  growth_curves$Females[day, t+1] <- coefs[1] + coefs[2]*log(growth_curves$Females[day-1,t+1]/700) + growth_curves$Females[day-1, t+1]
+  for(day in 2:(10*365)){
+  growth_curves$Females[day, t+1] <- growth_curves$Females[day-1, t+1]*exp(coefs[1] + coefs[2]*log(growth_curves$Females[day-1,t+1]/700))
   }
 }
 # Male growth curves
-growth_curves$Males <- as.data.frame(matrix(NA, nrow = 20*365, ncol = 6))
+growth_curves$Males <- as.data.frame(matrix(NA, nrow = 10*365, ncol = 6))
 colnames(growth_curves$Males) <- c("Day", "25th", "50th", "75th", "90th", "95th")
-growth_curves$Males$Day <- c(1:(20*365))
+growth_curves$Males$Day <- c(1:(10*365))
 growth_curves$Males[1, -1] <- 350
 for(t in 1:length(tau)) {
   coefs <- gompertz_coefficients[[t]]$M
-  for(day in 2:(20*365)){
-  growth_curves$Males[day, t+1] <- coefs[1] + coefs[2]*log(growth_curves$Males[day-1,t+1]/700) + growth_curves$Males[day-1, t+1]
+  for(day in 2:(10*365)){
+  growth_curves$Males[day, t+1] <- growth_curves$Males[day-1, t+1]*exp(coefs[1] + coefs[2]*log(growth_curves$Males[day-1,t+1]/700))
   }
 }
 
 all_growth_curves <- melt(growth_curves, id.vars = "Day")
 colnames(all_growth_curves)[2:4] <- c("Growth_quant", "SVL", "Sex")
-# 
-# ggplot(all_growth_curves, aes(x = Day/365, y = SVL, color = Growth_quant)) +
-#   geom_line() +
-#   facet_grid(rows = vars(Sex)) +
-#   theme_bw() +
-#   labs(x = "Year")
+
+ggplot(all_growth_curves, aes(x = Day/365, y = SVL, color = Growth_quant)) +
+  geom_line() +
+  # geom_hline(yintercept = 967.5, color = "red") + # average size for female sexual maturity
+  # geom_hline(yintercept = 985, color = "darkblue") + # average size for male sexual maturity
+  facet_grid(rows = vars(Sex)) +
+  theme_bw() +
+  labs(x = "Year", y = "SVL (mm)", color = "Growth \nQuantile")
   
+
+# Calculating time to reach sexual maturity - time to reach 910 
+
+
 ```
 
 ### Reproduction
@@ -431,7 +437,7 @@ Density estimates from various sources, at different times (use to create defaul
 
             -   Central Guam: 63/ha (45 - 108) for a 2 ha study area using Schumacher technique, CAPTURE estimated 58/ha (18 - 97) - although the CAPTURE assumptions were violated, but in small ways
 
-                -   Central had had snakes for longer, so during this study period, snakes had probably already peaked (birds and bats were already depleted)
+                -   Central had snakes for longer, so during this study period, snakes had probably already peaked (birds and bats were already depleted)
 
         -   
 
@@ -1482,13 +1488,14 @@ ggplot(all_results, aes(x = SVL, y = mortality_prob, color = method, group = sca
 SVL <- seq(350, 1850, 5)
 mortality <- vector()
 for(snake in 1:length(SVL)) {
-  mortality[snake] <- mortality_prob[[1]][1]*diet_trans_fun(SVL[snake])*mortality_decay_fun(SVL[snake])
+  mortality[snake] <- mortality_prob_erad_methods[[1]][1]*diet_trans_fun(SVL[snake])*mortality_decay_fun(SVL[snake])
 }
 
 ggplot(as.data.frame(cbind(SVL, mortality))) +
   geom_line(aes(x = SVL, y = mortality)) +
-  geom_hline(yintercept = mortality_prob[[1]][1], color = "blue") +
-  theme_bw()
+  #geom_hline(yintercept = mortality_prob[[1]][1], color = "blue") +
+  theme_bw() +
+  labs(x = "SVL (mm)", y = "")
 ```
 
 ```{r estimation_inputs}

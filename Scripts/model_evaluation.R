@@ -1,6 +1,7 @@
 ########################### Model evaluation metrics ########################### 
 
-#obs_quarters <- unique(unlist(erad_quarters[erad_methods[c(2,3)]]))
+# obs_quarters <- unique(unlist(erad_quarters[erad_methods[c(2,3)]]))
+
 
 # Function to summarize simulation data into size class N for each quarter
 summed_sim_data_fun <- function(simulation_quarter_data,
@@ -23,8 +24,10 @@ summed_sim_data_fun <- function(simulation_quarter_data,
   return(real_data_summed)
 }
 
-# Test
-#summed_data <- summed_sim_data_fun(erad_quarter_results)
+
+# # Test
+# summed_data <- summed_sim_data_fun(erad_quarter_results)
+
 
 
 # Function to separate (and sum when appropriate) estimated values - mean N, SD of N, and credible intervals for 95th percentile
@@ -61,8 +64,10 @@ summed_est_results_fun <- function(output_jags,
          estimated_N_95_CI_upper = estimated_N_95_CI_upper))
 }
 
-# Test
-#summed_results <- summed_est_results_fun(output_jags, obs_quarters)
+
+# # Test
+# summed_results <- summed_est_results_fun(output_jags, obs_quarters)
+
 
 
 ### Function to calculate:
@@ -93,7 +98,8 @@ accuracy_metrics_fun <- function(real_data,
   return(list(RMSE = RMSE, PRD = PRD))
 }
 
-# Test
+
+# # Test
 # accuracy_metrics <- accuracy_metrics_fun(summed_data,
 #                                          summed_results$estimated_N,
 #                                          obs_quarters)
@@ -131,8 +137,11 @@ percent_CV_fun <- function(estimated_N_sd,
          length_CV = length_CV))
 }
 
-# Test
-#percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, summed_results$estimated_N, obs_quarters)
+
+# # Test
+# percent_CV <- percent_CV_fun(summed_results$estimated_N_sd, 
+#                              summed_results$estimated_N, 
+#                              obs_quarters)
 
 ### Function to calculate coverage (how often the value falls between the 95% credible intervals)
 coverage_fun <- function(lower_CI,
@@ -164,7 +173,8 @@ coverage_fun <- function(lower_CI,
   return(coverage)
 }
 
-# Test
+
+# # Test
 # coverage <- coverage_fun(summed_results$estimated_N_95_CI_lower, 
 #                          summed_results$estimated_N_95_CI_upper,
 #                          obs_quarters, real_data_summed)
@@ -249,3 +259,4 @@ for(alt in 1:2) {
   }
 }
 saveRDS(estimated_N_sum_list, file = here("Results", "scenario_1", "all_estimated_N_sum_list.rds"))
+

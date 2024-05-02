@@ -180,14 +180,14 @@ transects_checked_per_hour$bait_tube <- 4 # Average number of transects checked 
 
 ### Scenario-specific values
 # Number of transects
-num_transects$total <- 113
-num_transects$visual <- 4 # the number of transects covered in a quarter
-num_transects$trap <- 28 # the number of transects covered in a quarter
-num_transects$bait_tube <- 28 # the number of transects covered in a quarter
+num_transects <- c("total" = 113,
+                   "visual" = 4, # the number of transects covered in a quarter
+                   "trap" = 28, # the number of transects covered in a quarter
+                   "bait_tube" = 28) # the number of transects covered in a quarter
 # Number of teams per method
-num_teams$visual <- 1 # number of teams of 2 people searching
-num_teams$trap <- 1
-num_teams$bait_tube <- 1
+num_teams <- c("visual" = 1, # number of teams of 2 people searching
+               "trap" = 1,
+               "bait_tube" = 1) 
 
 
 
@@ -220,9 +220,9 @@ cost_function <- function(methods,
   # If any transect methods included, calculate transect-related costs
   if(erad_methods[2] %in% methods | erad_methods[3] %in% methods | erad_methods[4] %in% methods) {
     # Set up
-    transect_set_up <- num_transects$total*init_transect_cost
+    transect_set_up <- num_transects[["total"]]*init_transect_cost
     # Per month
-    transect_maintenance <- maint_transect_cost*num_transects$total
+    transect_maintenance <- maint_transect_cost*num_transects[["total"]]
     # Total months 
     transect_months <- (max(unlist(erad_quarters[methods])) -  min(unlist(erad_quarters[methods])))*3
     # Total cost
@@ -232,9 +232,9 @@ cost_function <- function(methods,
   # Visual survey costs
   if(erad_methods[2] %in% methods) {
     # Set up
-    method_set_up$visual <- num_teams$visual*2*misc_init_equip$visual
+    method_set_up$visual <- num_teams[["visual"]]*2*misc_init_equip$visual
     # Per day
-    daily_cost$visual <- num_teams$visual*2*transect_hours_per_day$visual*person_cost_per_hour
+    daily_cost$visual <- num_teams[["visual"]]*2*transect_hours_per_day$visual*person_cost_per_hour
     # Per week
     weekly_cost$visual <- overhead_hours$visual*person_cost_per_hour
     # Total days and weeks
@@ -247,11 +247,11 @@ cost_function <- function(methods,
   # Trap costs
   if(erad_methods[3] %in% methods) {
     # Number of devices
-    num_devices$trap <- num_transects$total*(standard_transect_length/device_spacing$trap)
+    num_devices$trap <- num_transects[["total"]]*(standard_transect_length/device_spacing$trap)
     # Set up
     method_set_up$trap <- num_devices$trap*(per_device_cost$trap + per_bait_cost$trap) + misc_init_equip$trap
     # Per day
-    daily_cost$trap <- num_teams$trap*2*transect_hours_per_day$trap*person_cost_per_hour
+    daily_cost$trap <- num_teams[["trap"]]*2*transect_hours_per_day$trap*person_cost_per_hour
     # Per week
     weekly_cost$trap <- maintain_per_week_per_mouse*num_devices$trap + overhead_hours$trap*person_cost_per_hour
     # Total days and weeks
@@ -264,12 +264,12 @@ cost_function <- function(methods,
   # Bait tube costs
   if(erad_methods[4] %in% methods) {
     # Number of devices
-    num_devices$bait_tube <- num_transects$total*(standard_transect_length/device_spacing$bait_tube)
+    num_devices$bait_tube <- num_transects[["total"]]*(standard_transect_length/device_spacing$bait_tube)
     # Set up
     method_set_up$bait_tube <- num_devices$bait_tube*(per_device_cost$bait_tube + per_bait_cost$bait_tube) + 
       misc_init_equip$bait_tube
     # Per day
-    daily_cost$bait_tube <- num_teams$bait_tube*2*transect_hours_per_day$bait_tube*person_cost_per_hour + 
+    daily_cost$bait_tube <- num_teams[["bait_tube"]]*2*transect_hours_per_day$bait_tube*person_cost_per_hour + 
       per_bait_cost$bait_tube*(transects_checked_per_hour$bait_tube*transect_hours_per_day$bait_tube*(standard_transect_length/standard_between_transects))
     # Per week
     weekly_cost$bait_tube <- overhead_hours$bait_tube*person_cost_per_hour
