@@ -126,7 +126,8 @@ model_validation_fun <- function(quarter_timeseries,
 ### Transforming observed dead snakes into summary dataframes (# of snakes) for inputting
 ### into the estimation model
 
-all_observations_fun <- function(erad_results_ts,
+all_observations_fun <- function(all_observed_list,
+                                 all_effort_list,
                                  all_days,
                                  all_quarters,
                                  methods,
@@ -135,7 +136,7 @@ all_observations_fun <- function(erad_results_ts,
   # all_quarters <- sort(unique(unlist(erad_quarters[methods])))
   # all_days <- sort(unique(unlist(erad_days[methods])))
   # Combine all observed (captured) snakes into one dataframe
-  observed_list <- erad_results_ts$all_observed[unlist(lapply(erad_results_ts$all_observed, length) != 0)]
+  observed_list <- all_observed_list[unlist(lapply(all_observed_list, length) != 0)]
   # Remove empty lists from observed_list (when no snakes were found in a quarter)
   observed_list <- list_drop_empty(observed_list)
   # Combine all observations into one dataframe
@@ -147,7 +148,7 @@ all_observations_fun <- function(erad_results_ts,
   # Creating empty array to summarize results (for input into jags model)
   observations_array <- array(0, dim = c(num_methods, 4, length(all_days), length(all_quarters)))
   # Effort
-  effort_list <- erad_results_ts$all_effort[unlist(lapply(erad_results_ts$all_effort, length) != 0)]
+  effort_list <- all_effort_list[unlist(lapply(all_effort_list, length) != 0)]
   all_effort <- bind_rows(effort_list)
   effort_array <- array(0, dim = c(num_methods,length(all_days), length(all_quarters)))
   # Count the number of observed snake for each quarter & day that effort occurred
@@ -345,7 +346,7 @@ true_vital_rates_v1_fun <- function(all_erad_quarters,
 ## Function to create plots of mean N estimates from removal-based estimation model
 
 estimated_N_plots <- function(jags_output,
-                              erad_quarter_results,
+                              all_quarters,
                               observed_erad_quarters) {
   # Separating out quarters with observable removals
   #observed_erad_quarters <- sort(unique(unlist(erad_quarters[c(2,3)])))
@@ -377,7 +378,8 @@ estimated_N_plots <- function(jags_output,
   real_N <- mean_N
   for(size in size_class_names) {
     for(quarter in 1:length(observed_erad_quarters)) {
-      real_N[quarter, size] <- nrow(erad_quarter_results$all_quarters[erad_quarter_results$all_quarters$Quarter == (observed_erad_quarters[quarter]+1) & erad_quarter_results$all_quarters$size_category == size,]) 
+      real_N[quarter, size] <- nrow(all_quarters[all_quarters$Quarter == (observed_erad_quarters[quarter]+1) & 
+                                                                        all_quarters$size_category == size,]) 
     }
   }
   
