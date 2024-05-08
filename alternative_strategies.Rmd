@@ -869,15 +869,29 @@ while(t <= final_time_step) {
 library(doParallel)
 library(foreach)
 
-cl <- makeCluster(2)
+n_cores <- detectCores()
+
+cl <- makeCluster(n_cores/2)
 registerDoParallel(cl)
 
 # Example
-x <- iris[which(iris[,5] != "setosa"), c(1,5)]
-trials <- 1000
-r <- foreach(icount(trials), .combine = cbind)  %dopar% {
-  ind <- sample(100,100,replace = T)
-  result1 <- glm(x[ind,2]~x[ind,1], family = binomial(logit))
-  coefficients(result1)
+N_test <- c(10, 11)*area_size
+n_reps <- length(N_test)
+
+results <- foreach(i = 1:n_reps, .combine = list)  %dopar% {
+  quarter_operations(initial_N = N_test[i],
+                     initial_size_dist = c(0.4, 0.1, 0.1, 0.4), 
+                     p_g = g_density_prob,
+                     lambda = lambda,
+                     total_quarters = erad_quarter_time_step,
+                     total_days = day_time_step,
+                     erad = "on",
+                     erad_method = names(erad_quarters),
+                     erad_coverage = erad_coverage,
+                     primary_sampling_period = primary_sampling_period,
+                     erad_quarters = erad_quarters,
+                     erad_days = erad_days,
+                     ADS_overlap_on_transect = ADS_overlap_on_transect,
+                     type_of_run = "initial")
 }
 ```
