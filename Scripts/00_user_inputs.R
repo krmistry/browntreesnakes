@@ -136,7 +136,7 @@ erad_methods_size_affected$bait_tube <- c(850, 1100) # Clark et al 2018 for lowe
 
 # Encounter/mortality rates for each eradication method - for now, encounter = mortality, could change this in the future
 mortality_prob_erad_methods <- list()
-mortality_prob_erad_methods$ADS <- rep(0.43, 4) # Nafus 2022 - need to think about this further
+mortality_prob_erad_methods$ADS <- rep(0.43, 4) # Nafus 2022, and value is similar to other study findings
 mortality_prob_erad_methods$visual <- visual_rates_all # overall average from Staci's model results
 mortality_prob_erad_methods$trap <- trap_rates_all # overall average from Staci's model results, but there's more variation between size classes than for visual (0.0016-0.0044)
 mortality_prob_erad_methods$bait_tube <- rep(mean_trap_rate, 4) # placeholder value, same as trap since they are similar methods
