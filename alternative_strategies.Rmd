@@ -39,6 +39,8 @@ nb <- 10000 # 20000
 ni <- 30000 + nb # 50000
 nc <- 3
 
+# test
+
 ```
 
 ```{r jags_model_code}
