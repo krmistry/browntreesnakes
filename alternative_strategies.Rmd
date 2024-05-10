@@ -315,7 +315,7 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
   scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 ```
 
-Block to run the model once:
+Block to run the IBM model for all permutations:
 
 ```{r strategy_1_replicates}
 
@@ -329,7 +329,7 @@ for(P in 1:length(starting_density)) { # Starting pop permutation (low, medium o
   N_reps <- starting_pop[[P]]
   for(D in 1:length(starting_size_dist)) { # Starting size distribution permutation (more small or more large)
     size_dist <- starting_size_dist[[D]]
-    for(variant in 2:length(N_reps)) { # Start running through the 100 starting pop variants for the selected permutation
+    for(variant in 7:length(N_reps)) { # Start running through the 100 starting pop variants for the selected permutation
       replicates_strategy_one <- list()
       N <- N_reps[variant]
       for(n in 1:num_replicates) {
@@ -399,6 +399,69 @@ variants_plot_1 <- ggplot(erad_plot_data_melted_1, aes(x = as.numeric(Quarter), 
   facet_wrap(vars(size_category)) +
   theme_bw()
 
+```
+
+Parallel processing version
+
+```{r strategy_1_parallel}
+
+# For low population, more small
+P <- 1
+D <- 1
+
+N_reps <- starting_pop[[P]]
+size_dist <- starting_size_dist[[D]]
+
+library(doParallel)
+# Detect the number of clusters available
+n_cores <- detectCores()
+# Select half of them
+cl <- makeCluster(n_cores/2)
+registerDoParallel(cl)
+
+# Running model variants in parallel
+results <- foreach(variant = 10:length(N_reps), .combine = list)  %dopar% {
+  # Calling libraries needed (couldn't figure out how to attach them properly)
+  library(reshape2)
+  library(ggplot2)
+  library(dplyr)
+  library(here)
+  library(tictoc)
+  library(fdrtool)
+  library(jagsUI)
+  library(scales)
+  library(vctrs)
+  
+  replicates_strategy_one <- list()
+  N <- N_reps[variant]
+  for(n in 1:num_replicates) {
+      # Running model 
+     replicates_strategy_one[[n]] <- quarter_operations(initial_N = N, 
+                                               initial_size_dist = size_dist, 
+                                               p_g = g_density_prob,
+                                               lambda = lambda,
+                                               total_quarters = erad_quarter_time_step,
+                                               total_days = day_time_step,
+                                               erad = "on",
+                                               erad_method = names(erad_quarters),
+                                               erad_coverage = erad_coverage,
+                                             primary_sampling_period = primary_sampling_period,
+                                             erad_quarters = erad_quarters,
+                                             erad_days = erad_days,
+                                             ADS_overlap_on_transect = ADS_overlap_on_transect,
+                           type_of_run = "initial",
+                           num_teams = num_teams)
+     print(paste0("replicate ", n, " complete"))
+  } # End of replicates loop
+  # Save each variant list
+  saveRDS(replicates_strategy_one, file = here("Results", "alt_strategies", paste0("strategy_one_IBM_start_pop_",names(starting_pop)[P], "-", names(starting_size_dist)[D], "-var_", variant, ".rds")))
+  #print(paste0("variant ", variant, " complete"))
+  replicates_strategy_one
+}
+
+
+# Stop the cluster
+stopCluster(cl = cl)
 ```
 
 ### Strategy 2: Experimental approach (medium to high effort with all methods, using many thresholds)
@@ -884,7 +947,7 @@ while(t <= final_time_step) {
 
 ```
 
-```{r parallel_attempt}
+```{r strategy_2_parallel_attempt}
 
 # Setting up parallel clusters
 library(doParallel)
@@ -1023,7 +1086,7 @@ results <- foreach(variant = 1:4, .combine = list)  %dopar% {
     output_jags <- jags(data = estimation_inputs$data,
                       inits = estimation_inputs$inits,
                       parameters.to.save = estimation_inputs$parameters,
-                      "removal_model_simple_zero-inf.jags",
+                      "removal_model_alt_strategies.jags",
                       n.chains = nc,
                       n.thin = nt,
                       n.iter = ni,
@@ -1050,6 +1113,6 @@ results <- foreach(variant = 1:4, .combine = list)  %dopar% {
 
 
 # Stop the cluster
-stopCluster(cl = cluster)
+stopCluster(cl = cl)
 
 ```
