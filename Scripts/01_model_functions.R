@@ -757,11 +757,17 @@ daily_operations <- function(first_day_pop,
           growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
           # Separating out surviving moms to add back in after growth
           surviving_moms <- surviving_pop[surviving_pop$ID %in% moms$ID, ]
-          ## Each snake grows (or not) based on it's individual growth quantile
-          #print(paste0("growing pop is ", nrow(growing_pop)))
-          for(snake in 1:nrow(growing_pop)) {
-            growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
-                                                             p_g)
+          # Check to see that growing_pop isn't empty
+          if(exists("growing_pop") & nrow(growing_pop) > 0) {
+            ## Each snake grows (or not) based on it's individual growth quantile
+            #print(paste0("growing pop is ", nrow(growing_pop)))
+            for(snake in 1:nrow(growing_pop)) {
+              growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
+                                                               p_g)
+            }
+          } else {
+            # If growing_pop didn't exist before, create an empty df with that name
+            growing_pop <- pop[0,]
           }
         }
       } else { # If eradication isn't occurring in this quarter, then both natural 
