@@ -347,16 +347,17 @@ true_vital_rates_v1_fun <- function(all_erad_quarters,
 
 estimated_N_plots <- function(jags_output,
                               all_quarters,
-                              observed_erad_quarters) {
-  # Separating out quarters with observable removals
-  #observed_erad_quarters <- sort(unique(unlist(erad_quarters[c(2,3)])))
+                              observed_erad_quarters,
+                              observed_erad_days) {
+  # Final day 
+  final_day <- length(observed_erad_days)
   
   mean_N <- as.data.frame(matrix(0, nrow = length(observed_erad_quarters), ncol = 4))
   colnames(mean_N) <- size_class_names
   mean_N$Quarter <- observed_erad_quarters
   for(size in 1:length(size_class_names)) {
     for(quarter in 1:length(observed_erad_quarters)) {
-      mean_N[quarter, size] <- jags_output$mean$N[size,I[1],quarter]
+      mean_N[quarter, size] <- jags_output$mean$N[size,final_day,quarter]
     }
   }
   
@@ -367,8 +368,8 @@ estimated_N_plots <- function(jags_output,
   for(size in 1:length(size_class_names)) {
     for(quarter in 1:length(observed_erad_quarters)) {
       row_counter <- quarter + (size-1)*length(observed_erad_quarters)
-      mean_N_long$lower_bound[row_counter] <- jags_output$q2.5$N[size,I[1],quarter]
-      mean_N_long$upper_bound[row_counter] <- jags_output$q97.5$N[size,I[1],quarter]
+      mean_N_long$lower_bound[row_counter] <- jags_output$q2.5$N[size,final_day,quarter]
+      mean_N_long$upper_bound[row_counter] <- jags_output$q97.5$N[size,final_day,quarter]
     }
   }
 
