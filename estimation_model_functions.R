@@ -4,7 +4,7 @@
 estimation_inputs_fun <- function(observed_list,
                                   effort_list,
                                   #erad_days,
-                                  parameters = c("N","p", "N.sum"),
+                                  parameters = c("N","p", "N.sum", "r1", "r2", "r3", "r4"),
                                   N_prior = 30*area_size, # for version of model with uniform N_prior
                                   size_class = size_class_names) {
   
@@ -113,7 +113,8 @@ estimation_inputs_fun <- function(observed_list,
   return(list(data = data,
               inits = inits,
               parameters = parameters,
-              obs_quarters = obs_quarters))
+              obs_quarters = obs_quarters,
+              obs_days = obs_days))
 }
 
   
