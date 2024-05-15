@@ -224,10 +224,10 @@ for(P in 1:length(starting_density)) { # Starting pop permutation (low, medium o
   N_reps <- starting_pop[[P]]
   for(D in 1:length(starting_size_dist)) { # Starting size distribution permutation (more small or more large)
     size_dist <- starting_size_dist[[D]]
-    for(variant in 1:length(N_reps)) { # Start running through the 100 starting pop variants for the selected permutation
+    for(variant in 16:length(N_reps)) { # Start running through the 100 starting pop variants for the selected permutation
       replicates_strategy_one <- list()
       N <- N_reps[variant]
-      for(n in 2:num_replicates) {
+      for(n in 1:num_replicates) {
           # Running model 
          replicates_strategy_one[[n]] <- quarter_operations(initial_N = N, 
                                                    initial_size_dist = size_dist, 
@@ -292,6 +292,62 @@ variants_plot_1 <- ggplot(erad_plot_data_melted_1, aes(x = as.numeric(Quarter), 
   theme_bw()
 
 ```
+
+
+```{r strategy_one_parallel}
+
+library(doParallel)
+
+# Detect the number of cores available
+n_cores <- detectCores()
+# Select half of them, and register as cluster
+cl <- makeCluster(n_cores/2)
+registerDoParallel(cl)
+
+# Set up scenario 
+P <- 3
+D <- 1
+N_reps <- starting_pop[[P]]
+size_dist <- starting_size_dist[[D]]
+# Number of replicates for each starting pop permutation
+num_replicates <- 100
+
+results <- foreach(variant = 1:length(N_reps)) %dopar% {
+  library(reshape2)
+  library(ggplot2)
+  library(dplyr)
+  library(here)
+  library(tictoc)
+  library(fdrtool)
+  library(jagsUI)
+  library(scales)
+  library(vctrs)
+  # Create empty list to store results
+  replicates_strategy_one = list()
+  # Select N
+  N <- N_reps[variant]
+  for(n in 1:num_replicates) {
+    # Running model 
+         replicates_strategy_one[[n]] <- quarter_operations(initial_N = N, 
+                                                   initial_size_dist = size_dist, 
+                                                   p_g = g_density_prob,
+                                                   lambda = lambda,
+                                                   total_quarters = erad_quarter_time_step,
+                                                   total_days = day_time_step,
+                                                   erad = "on",
+                                                   erad_method = names(erad_quarters),
+                                                   erad_coverage = erad_coverage,
+                                                 primary_sampling_period = primary_sampling_period,
+                                                 erad_quarters = erad_quarters,
+                                                 erad_days = erad_days)
+         print(paste0("replicate ", n, " complete"))
+      } # End of replicates loop
+      # Save each variant list
+      saveRDS(replicates_strategy_one, file = here("Results", "alt_strategies", paste0("strategy_one_IBM_start_pop_",names(starting_pop)[P], "-", names(starting_size_dist)[D], "-var_", variant, ".rds")))
+  
+}
+```
+
 
 ### Strategy 2: Experimental approach (medium to high effort with all methods, using many thresholds)
 
