@@ -298,7 +298,8 @@ eradication_fun <- function(encounter_pop,
                             #coverage, 
                             #size_affected = c(0, Inf), 
                             mortality_prob,
-                            method) {
+                            method,
+                            num_vis_teams) {
   # # Separating out the proportion of the population that will be affected by eradication (coverage) from the non-encountering population
   # encounter_pop <- slice_sample(day_pop, prop = coverage)
   # no_encounter_pop <- day_pop[!day_pop$ID %in% encounter_pop$ID, ]
@@ -313,6 +314,10 @@ eradication_fun <- function(encounter_pop,
       }
     } else if(method %in% erad_methods[c(2,3)]) {
       size_class <- size_class_fun(encounter_pop$SVL[snake])
+      # For visual surveys only, the encounter probability can be increased if multiple teams are used on the same transects on the same days
+        if(method == "visual") {
+          mortality_prob <- mortality_prob*num_vis_teams
+        }
       if (rbinom(1, 1, prob = mortality_prob[size_class]) == 1) { 
         encounter_pop$encounter[snake] <- 1
       } else {
@@ -351,113 +356,22 @@ eradication_fun <- function(encounter_pop,
 #                      method = erad_methods[2])
 
 
-# erad_timing_fun <- function(day, 
-#                             quarter,
-#                             erad_method,
-#                             pop,
-#                             ADS_IDs,
-#                             transect_pop_IDs){
-#   # Creating empty lists to hold dead snakes, alive snakes and effort lists for each method
-#   observed <- list()
-#   unobserved <- list()
-#   transect_encounter_pop <- list()
-#   transect_encounter_pop[[1]] <- transect_pop
-#   #ADS_encounter_pop <- list()
-#   effort <- list()
-#   #################### below operations should be part of the daily_operations_fun ###
-#   # # # Perform each eradication that occurs on this day & quarter sequentially
-#   # # survivors[[1]] <- growing_pop
-#   # # Selecting proportion of population near transects, where some eradication will 
-#   # # occur
-#   # transect_encounter_pop <- slice_sample(growing_pop, prop = erad_coverage$visual)
-#   # # Selecting proportion of population available to ADS, based on how much overlap there
-#   # # is with the transects (take the overlap proportion from transect_encounter_pop,
-#   # # then the remaining from the rest of the population)
-#   # num_ADS_encounter <- nrow(growing_pop)*erad_coverage$ADS
-#   # overlap_encounter_pop <- slice_sample(transect_encounter_pop, 
-#   #                                       prop = ADS_overlap_w_transect)
-#   # remaining_encounter_pop <- slice_sample(growing_pop[!growing_pop$ID %in% transect_encounter_pop$ID, ],
-#   #                                 n = (num_ADS_encounter-nrow(overlap_encounter_pop)))
-#   # ADS_encounter_pop <- rbind(overlap_encounter_pop, remaining_encounter_pop)
-#   # # Separating individuals who are not subject to any eradication in this quarter
-#   # no_encounter_pop <- growing_pop[!growing_pop$ID %in% c(transect_encounter_pop$ID, 
-#   #                                                        ADS_encounter_pop$ID), ]
-#   ############################################################ 
-#   for(method in 1:length(erad_method)) {
-#     method_name <- erad_method[method]
-#     #pop <- survivors[[method]]
-#     if(quarter %in% erad_quarters[[method_name]] & day %in% erad_days[[method_name]]){
-#       if(method_name == erad_methods[1]) {
-#         erad_pop <- eradication_fun(encounter_pop = ADS_pop, 
-#                                   #coverage = erad_coverage[[method_name]], 
-#                                   mortality_prob = mortality_prob_erad_methods[[method_name]],
-#                                   method = method_name)
-#         ADS_surviving_pop <- erad_pop$alive_snakes
-#       } else {
-#         # if ("ADS" %in% erad_method) {
-#         # transect_encounter_pop[[method]] <- transect_pop[!transect_pop$ID %in% erad_pop$dead_snakes$ID, ]
-#       #   erad_pop <- eradication_fun(encounter_pop = transect_encounter_pop[[method]], 
-#       #                               #coverage = erad_coverage[[method_name]], 
-#       #                               mortality_prob = mortality_prob_erad_methods[[method_name]],
-#       #                               method = method_name)
-#       #   transect_encounter_pop[[method+1]] <- erad_pop$alive_snakes
-#       # } else {
-#         erad_pop <- eradication_fun(encounter_pop = transect_encounter_pop[[method]], 
-#                                     #coverage = erad_coverage[[method_name]], 
-#                                     mortality_prob = mortality_prob_erad_methods[[method_name]],
-#                                     method = method_name)
-#         transect_encounter_pop[[method+1]] <- erad_pop$alive_snakes
-#         #}
-#       }
-#       #survivors[[method + 1]] <- erad_pop$alive_snakes
-#       effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
-#                                                    "day" = day,
-#                                                    "quarter" = quarter))
-#   
-#       # Eradication with bodies occurs:
-#       if(nrow(erad_pop$dead_snakes) > 0) {
-#         if (method_name %in% erad_methods[c(2:3)]) {
-#           observed[[method_name]] <- erad_pop$dead_snakes
-#           observed[[method_name]]$day <- day
-#           observed[[method_name]]$quarter <- quarter
-#         } else { # Eradication with no bodies
-#           unobserved[[method_name]] <- erad_pop$dead_snakes
-#           unobserved[[method_name]]$day <- day
-#           unobserved[[method_name]]$quarter <- quarter
-#         }
-#       }
-#     # else {
-#     #   survivors[[method + 1]] <- survivors[[method]]
-#     # }
-#       }
-#   }
-#   
-#   #final_transect_pop <- transect_encounter_pop[[length(transect_encounter_pop)]]
-#   
-#   if("ADS" %in% erad_method) {
-#     final_survivors <-  rbind(ADS_surviving_pop, 
-#                               transect_encounter_pop[[length(transect_encounter_pop)]]) %>%
-#       .[!duplicated(.$ID),]
-#   } else {
-#     final_survivors <- transect_encounter_pop[[length(transect_encounter_pop)]]
-#   }
-#   #final_survivors <- rbind(survivors, no_encounter_pop)
-#   return(list(observed_snakes = observed, 
-#               unobserved_dead_snakes = unobserved,
-#               surviving_snakes = final_survivors,
-#               all_effort = effort))
-# }
-
 erad_timing_fun <- function(day, 
                             quarter,
                             erad_method,
                             pop,
                             ADS_IDs,
-                            transect_IDs){
+                            transect_IDs,
+                            num_teams,
+                            effort_per_method){ # list, with at least a named element called $visual
   # Creating empty lists to hold dead snakes, alive snakes and effort lists for each method
   observed <- list()
   unobserved <- list()
   transect_encounter_pop <- list()
+  
+  # Modify effort for visual survey only (the base effort, 4 hours, is for one team per day)
+  effort_per_method$visual <- effort_per_method$visual*num_teams$visual
+  
   # ###### Subsetting by day by method
   # day_transect_IDs <- list()
   # if(day_method_subset <- "on") {
@@ -502,14 +416,15 @@ erad_timing_fun <- function(day,
         if(nrow(transect_encounter_pop[[method]]) > 0){
         erad_pop <- eradication_fun(encounter_pop = transect_encounter_pop[[method]], 
                                     mortality_prob = mortality_prob_erad_methods[[method_name]],
-                                    method = method_name)
+                                    method = method_name,
+                                    num_vis_teams = num_teams$visual)
         transect_encounter_pop[[method+1]] <- erad_pop$alive_snakes
         } else {
           transect_encounter_pop[[method+1]] <- transect_encounter_pop[[method]]
         }
       }
     # Tracking effort for each method  
-    effort[[method_name]] <- as.data.frame(cbind("effort" = effort_erad_methods[[method_name]],
+    effort[[method_name]] <- as.data.frame(cbind("effort" = effort_per_method[[method_name]],
                                                    "day" = day,
                                                    "quarter" = quarter))
       
@@ -676,7 +591,8 @@ daily_operations <- function(first_day_pop,
                              erad_coverage,
                              primary_sampling_period,
                              erad_quarters,
-                             erad_days) {
+                             erad_days,
+                             num_teams) {
   daily_pop <- list()
   erad_results <- list()
   ## Growth and mortality on a daily scale within the quarter 
@@ -735,10 +651,16 @@ daily_operations <- function(first_day_pop,
         if(day > primary_sampling_period[1] & day < primary_sampling_period[2]) {
           # Excluding reproductive females to create population who has the potential to grow in this quarter
           growing_pop <- pop[!pop$ID %in% moms$ID, ]
-          ## Each snake grows (or not) based on it's individual growth quantile
-          for(snake in 1:nrow(growing_pop)) {
-            growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
-                                                             p_g)
+          # Checking to make sure there are any non-mom snakes who can grow
+          if(exists("growing_pop") == TRUE & nrow(growing_pop) > 0) {
+            ## Each snake grows (or not) based on it's individual growth quantile
+            for(snake in 1:nrow(growing_pop)) {
+              growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
+                                                               p_g)
+            }
+          } else {
+            # If no non-mom snakes are available to grow, create empty dataframe with the right name so the code doesn't break
+            growing_pop <- pop[0,]
           }
           surviving_moms <- moms
         } else { # if the day is outside the primary sampling period, then
@@ -753,20 +675,19 @@ daily_operations <- function(first_day_pop,
           # Checking to see what the mortality is from natural causes
           dead_snakes <- mort_results$num_dead_snakes
           #print(paste0("natural mortality is ", dead_snakes))
-          # Excluding reproductive females to create population who has the potential to grow in this quarter
-          growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
           # Separating out surviving moms to add back in after growth
           surviving_moms <- surviving_pop[surviving_pop$ID %in% moms$ID, ]
-          # Check to see that growing_pop isn't empty
-          if(exists("growing_pop") & nrow(growing_pop) > 0) {
-            ## Each snake grows (or not) based on it's individual growth quantile
-            #print(paste0("growing pop is ", nrow(growing_pop)))
+          # Excluding reproductive females to create population who has the potential to grow in this quarter
+          growing_pop <- surviving_pop[!surviving_pop$ID %in% moms$ID, ]
+          ## Each snake grows (or not) based on it's individual growth quantile
+          #print(paste0("growing pop is ", nrow(growing_pop)))
+          if(exists("growing_pop") == TRUE & nrow(growing_pop) > 0) {
             for(snake in 1:nrow(growing_pop)) {
               growing_pop[snake,] <- daily_gompertz_growth_fun(growing_pop[snake,],
                                                                p_g)
             }
           } else {
-            # If growing_pop didn't exist before, create an empty df with that name
+            # If no non-mom snakes are available to grow, create empty dataframe with the right name so the code doesn't break
             growing_pop <- pop[0,]
           }
         }
@@ -833,7 +754,9 @@ daily_operations <- function(first_day_pop,
                                                erad_method = today_methods, 
                                                pop = growing_pop,
                                                ADS_IDs = ADS_pop_IDs,
-                                               transect_IDs = transect_pop_IDs)
+                                               transect_IDs = transect_pop_IDs,
+                                               num_teams = num_teams,
+                                               effort_per_method = effort_erad_methods)
         # print(paste0("ADS pop IDs before reconcile = ", length(ADS_pop_IDs)))
         # Update eradication population ID lists by removing IDs that were removed today
         if(length(erad_results[[day]]$all_dead_IDs) > 0) {
@@ -865,7 +788,9 @@ daily_operations <- function(first_day_pop,
                                                erad_method = today_methods, 
                                                pop = growing_pop,
                                                ADS_IDs = ADS_pop_IDs,
-                                               transect_IDs = transect_pop_IDs)
+                                               transect_IDs = transect_pop_IDs,
+                                               num_teams = num_teams,
+                                               effort_per_method = effort_erad_methods)
         # Update eradication population ID lists by removing IDs that were removed today
         if(length(erad_results[[day]]$all_dead_IDs) > 0) {
           transect_remove_2 <- which(transect_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
@@ -887,7 +812,9 @@ daily_operations <- function(first_day_pop,
                                                erad_method = today_methods, 
                                                pop = growing_pop,
                                                ADS_IDs = ADS_pop_IDs,
-                                               transect_IDs = transect_pop_IDs)
+                                               transect_IDs = transect_pop_IDs,
+                                               num_teams = num_teams,
+                                               effort_per_method = effort_erad_methods)
         # Update ADS IDs list
         if(length(erad_results[[day]]$all_dead_IDs) > 0) {
           ADS_remove_2 <- which(ADS_pop_IDs %in% erad_results[[day]]$all_dead_IDs)
@@ -975,11 +902,24 @@ daily_operations <- function(first_day_pop,
               day_after_erad_pop = day_after_erad_pop))
 }
 
-# Test
+# #Test
 # total_days <- 91
-# first_day_pop <- init_pop_fun(N, size_dist, size_class_limits)
+# first_day_pop <- init_pop_fun(5, size_dist, size_class_limits)
 # moms <- repro_females_fun(start_pop = first_day_pop,
 #                           density_prob = DD_param_fun(K, nrow(first_day_pop)))
+# test_quarters <- list()
+# test_quarters$ADS <- c(1,2)
+# test_days <- list()
+# for(quarter in 1:2) {
+#   test_days[[quarter]] <- list()
+#   test_days[[quarter]]$ADS <- c(45, 48)
+# }
+# test_coverage <- list()
+# test_coverage$ADS <- 1
+# test_coverage$transects_per_quarter <- 0
+# num_teams <- list()
+# num_teams$visual <- 1
+# 
 # z <- daily_operations(first_day_pop,
 #                       g_density_prob,
 #                       moms,
@@ -987,7 +927,12 @@ daily_operations <- function(first_day_pop,
 #                       erad_methods,
 #                       erad = "on",
 #                       quarter = 1,
-#                       ADS_overlap_w_transect = 1)
+#                       ADS_overlap_w_transect = 1,
+#                       erad_coverage = test_coverage,
+#                       primary_sampling_period = c(0,0),
+#                       erad_quarters = test_quarters,
+#                       erad_days = test_days,
+#                       num_teams = num_teams)
 # remove(first_day_pop)
 # remove(moms)
 # remove(z)
@@ -1082,7 +1027,11 @@ quarter_operations <- function(initial_N,
                                erad_coverage,
                                primary_sampling_period,
                                erad_quarters,
-                               erad_days) {
+                               erad_days,
+                               ADS_overlap_on_transect,
+                               type_of_run = c("initial", "continuing"),
+                               num_teams,
+                               last_quarter_df) {
   # Empty lists to put population from each time step in (records the population at the 
   # beginning of each quarter, and for all the days in the final quarter)
   quarter_timeseries_pop <- list()
@@ -1101,13 +1050,17 @@ quarter_operations <- function(initial_N,
   quarter_pops_before_erad <- list()
   quarter_pops_after_erad <- list()
   
-  # Setting up the initial population in the first time step
-  quarter_timeseries_pop[[1]] <- init_pop_fun(init_N = initial_N,
-                                              init_size_dist = initial_size_dist,
-                                              size_limits = size_class_limits)
+  if(type_of_run == "initial") {
+    # Setting up the initial population in the first time step
+    quarter_timeseries_pop[[1]] <- init_pop_fun(init_N = initial_N,
+                                                init_size_dist = initial_size_dist,
+                                                size_limits = size_class_limits)
+  } else if(type_of_run == "continuing") {
+    quarter_timeseries_pop[[1]] <- last_quarter_df
+  }
   # print("initial_pop created")
   for(quarter in 1:total_quarters) {
-    tic(paste0("Quarter ", quarter))
+    #tic(paste0("Quarter ", quarter))
     # Check if the population has gone to 0
     if(nrow(quarter_timeseries_pop[[quarter]]) == 0) {
       print("Population eradicated")
@@ -1166,7 +1119,8 @@ quarter_operations <- function(initial_N,
                                       erad_coverage = erad_coverage,
                                       primary_sampling_period = primary_sampling_period,
                                       erad_quarters = erad_quarters,
-                                      erad_days = erad_days)
+                                      erad_days = erad_days,
+                                      num_teams = num_teams)
     daily_timeseries_pop <- daily_results$daily_timeseries
     print(paste0("daily timeseries indiv ", nrow(daily_timeseries_pop[[1]])))
     if(length(daily_timeseries_pop) < total_days) {
@@ -1191,7 +1145,7 @@ quarter_operations <- function(initial_N,
     # Saving before and after eradication populations
     quarter_pops_before_erad[[quarter]] <- daily_results$day_before_erad_pop
     quarter_pops_after_erad[[quarter]] <- daily_results$day_after_erad_pop
-    toc()
+    #toc()
     
   }
   # Formating quarter results for plotting
@@ -1214,17 +1168,37 @@ quarter_operations <- function(initial_N,
 
 # # Test
 # test_total_quarters <- 3
-# test_N <- 1000
+# test_N <- 10
 # test_size_dist <- c(0.5, 0.1, 0.2, 0.2)
 # p_g <- 0.75
+# test_quarters <- list()
+# test_quarters$ADS <- c(1,2)
+# test_days <- list()
+# for(quarter in 1:2) {
+#   test_days[[quarter]] <- list()
+#   test_days[[quarter]]$ADS <- c(45, 48)
+# }
+# test_coverage <- list()
+# test_coverage$ADS <- 1
+# test_coverage$transects_per_quarter <- 0
+# num_teams <- list()
+# num_teams$visual <- 1
+# 
 # a <- quarter_operations(initial_N = test_N,
 #                         initial_size_dist = test_size_dist,
 #                         p_g = p_g,
 #                         lambda = lambda,
 #                         total_quarters =  test_total_quarters,
 #                         total_days = 91,
-#                         erad = "on",
-#                         erad_method = erad_methods)
+#                         erad = "off",
+#                         erad_method = erad_methods[1],
+#                         erad_coverage = test_coverage,
+#                         primary_sampling_period = c(0,0),
+#                         erad_quarters = test_quarters,
+#                         erad_days = test_days,
+#                         ADS_overlap_on_transect = 1,
+#                         type_of_run = "initial",
+#                         num_teams = num_teams)
 # remove(test_total_quarters)
 # remove(test_N)
 # remove(test_size_dist)
