@@ -932,9 +932,11 @@ while(t <= final_time_step) {
                     n.thin = nt,
                     n.iter = ni,
                     n.burnin = nb)
-
-  saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
-  paste0("output_jags_test_", t, ".RDS")))
+  if(t %in% c(1:5, 10, 15, 20)) {
+    saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
+    paste0("output_jags_test_", t, ".RDS")))
+  }
+  
   # Mean N estimates vs simulated real N
   est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
                                          all_quarters = IBM_all_quarters,
@@ -947,6 +949,17 @@ while(t <= final_time_step) {
   # Advancing counter by the number of quarters that have been estimated
   t <- t+1
 }
+
+
+library(here)
+source(here("strategy_2_parallel_function.R"))
+# Using the parallel function, sequentially
+for(variant in 1:10) {
+  strat_2_parallel_fun(P = 2, 
+                       D = 1, 
+                       final_time_step = 20,
+                       variant = variant)
+}
     
 
 
@@ -958,14 +971,14 @@ while(t <= final_time_step) {
 library(doParallel)
 # Detect the number of clusters available
 n_cores <- detectCores()
-# Select half of them
-cl <- makeCluster(n_cores/2)
+# Select half of them - broke, so trying fewer cores
+cl <- makeCluster(n_cores/4, outfile = "")
 registerDoParallel(cl)
 
 
 # Using parallel function:
 # Parallel test
-results <- foreach(variant = 1:100)  %dopar% {
+results <- foreach(variant = 1:50)  %dopar% {
   library(here)
   source(here("strategy_2_parallel_function.R"))
   strat_2_parallel_fun(P = 2, 
