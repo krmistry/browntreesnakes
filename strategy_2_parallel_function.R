@@ -128,10 +128,12 @@ strat_2_parallel_fun <- function(P,
                         n.thin = nt,
                         n.iter = ni,
                         n.burnin = nb)
+    if(t %in% c(1:5, 10, 15, 20)) {
+      saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
+                                       paste0("output_jags_sum_start_pop_", names(starting_pop)[P], "_", 
+                                              names(starting_size_dist)[D], "_variant-",variant, "_est_", t, ".RDS")))
+    }
     
-    saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
-                                     paste0("output_jags_start_pop_", names(starting_pop)[P], "_", 
-                                            names(starting_size_dist)[D], "_variant-",variant, "_est_", t, ".RDS")))
     # Mean N estimates vs simulated real N
     est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
                                            all_quarters = IBM_all_quarters,
