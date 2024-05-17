@@ -5,7 +5,7 @@ estimation_inputs_fun <- function(observed_list,
                                   effort_list,
                                   #erad_days,
                                   parameters = c("N","p", "N.sum", "r1", "r2", "r3", "r4"),
-                                  N_prior = 30*area_size, # for version of model with uniform N_prior
+                                  N_prior = (K/2)*area_size, # for version of model with uniform N_prior
                                   size_class = size_class_names) {
   
   # Estimation model set up
