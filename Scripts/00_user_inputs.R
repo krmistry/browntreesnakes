@@ -1,6 +1,6 @@
 ############### User & Modeler Inputs to BTS Simulation Model #################
 
-library(jagsUI)
+
 
 ####################### IBM objects #######################################
 size_class_names <- c("small", "medium", "large", "xlarge")
