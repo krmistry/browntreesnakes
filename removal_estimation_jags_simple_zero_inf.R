@@ -67,7 +67,7 @@ for(t in 1:(Q-1)) {
 }
 
 
-# JAGS Removal Estimation Model - simple growth version 
+# JAGS Removal Estimation Model - simple growth with zero inflation
 sink("removal_model_simple_zero-inf.jags")
 cat("
 model {
