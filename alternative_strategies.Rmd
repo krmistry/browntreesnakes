@@ -17,6 +17,8 @@ library(fdrtool)
 library(jagsUI)
 library(scales)
 library(vctrs)
+library(doParallel)
+library(jagsUI)
 
 source(here("Scripts/00_user_inputs.R"))
 source(here("Scripts/01_model_functions.R"))
@@ -967,7 +969,7 @@ N_reps <- starting_pop[[1]]
 size_dist <- starting_size_dist[[1]]
 final_time_step <- 2 # one year to start with
 # Running model variants in parallel
-results <- foreach(variant = 1:4)  %dopar% {
+results <- foreach(variant = 1:8)  %dopar% {
   # Calling libraries needed (couldn't figure out how to attach them properly)
   library(dplyr)
   library(reshape2)
@@ -1155,7 +1157,7 @@ A strategy with no ADS but a high amount of transect-based effort, geared toward
 
         -   This means that 1 team can cover the entire area each quarter (some overlap would occur, but that wouldn't change the coverage parameter since 100% coverage is the maximum). It would change the encounter probability though - however, since 31 days is only 2 days more than 29, I'll operate as though encounter is based on just 1 team. Increasing effort, though, would require increasing the number of teams (and therefore the encounter probability), in the threshold 1 scenario
 
-            -   Going with 100% coverage with one teams for now
+            -   Going with 100% coverage with four teams
 
     -   Traps are checked every 3rd day for the same 9 weeks (same overlapping with bait tubes as visual survey, so 3 weeks)
 
@@ -1239,7 +1241,7 @@ for(quarter in 1:erad_quarter_time_step) {
   # Trap: medium effort (6 weeks) per quarter - checking traps every 3 days
   method_options$initial$erad_days[[quarter]]$trap <- seq(2, (7*10 - 1), 3)
   # Bait tubes: medium effort (6 weeks) per quarter
-  method_options$initial$erad_days[[quarter]]$bait_tube <- seq(7*3 + 1, (7*12 - 1), 3)
+  method_options$initial$erad_days[[quarter]]$bait_tube <- seq(7*3, (7*12 - 1), 3)
 }
 names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
 
@@ -1247,72 +1249,61 @@ names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_t
 method_options$threshold_1$erad_days <- list()
 for(quarter in 1:erad_quarter_time_step) {
   method_options$threshold_1$erad_days[[quarter]] <- list()
+}
+for(quarter in method_options$threshold_1$erad_quarters$visual) {
   # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
-  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
+  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, 7*2, 2)
 }
 names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
 
 
-# Bounds of primary sampling periods for each condition (the same for the first 3)
-for(option in 1:length(method_options) {
-  method_options[[option]]$primary_sampling_period <- c(2,(7*6 - 1))
-}
-
+# Bounds of primary sampling periods for each condition (different for each)
+method_options$initial$primary_sampling_period <- c(2,(7*3 - 1))
+method_options$threshold_1$primary_sampling_period <- c(2, 7*2)
 
 
 ## Coverage for each method in a quarter for each condition
 for(option in 1:length(method_options)) {
   method_options[[option]]$erad_coverage <- list()
-  # overlap of ADS over transects (100%) is the same for all conditions
+  # even though there is no ADS in this strategy, this is a required parameter, and it doesn't actually impact anything
   method_options[[option]]$ADS_overlap_on_transect <- 1 
 }
 # Initial condition coverage
-method_options$initial$erad_coverage$ADS <- 1
-# Transect coverage (~50%)
-method_options$initial$erad_coverage$transects_per_quarter <- 0.5
+method_options$initial$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
+# Transect coverage (100%)
+method_options$initial$erad_coverage$transects_per_quarter <- 1
 
 # Threshold 1 condition coverage
 method_options$threshold_1$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
 # Transect coverage (100% because effort is doubled) 
 method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
 
-# Threshold 2 condition coverage
-method_options$threshold_2$erad_coverage$ADS <- 1
-# Transect coverage (100%)
-method_options$threshold_2$erad_coverage$transects_per_quarter <- 1
-
-# Threshold 3 condition coverage
-method_options$threshold_3$erad_coverage$ADS <- 0 # necessary for a function,
-# Transect coverage (~50%)
-method_options$threshold_3$erad_coverage$transects_per_quarter <- 0.5
 
 # Number of visual survey teams for each method
 for(option in 1:length(method_options)) {
   method_options[[option]]$num_teams <- list()
 }
 
-method_options$initial$num_teams$visual <- 1
-method_options$threshold_1$num_teams$visual <- 1
-method_options$threshold_2$num_teams$visual <- 1
-method_options$threshold_3$num_teams$visual <- 1
+method_options$initial$num_teams$visual <- 4
+method_options$threshold_1$num_teams$visual <- 2
 
 ```
 
 ```{r strategy_3_run_IBM_once}
 
 # Initial total N 
-N <- 10*area_size
+N <- starting_pop[[1]][1]
 # Initial size distribution
-size_dist <- c(0.4, 0.1, 0.1, 0.4)
+size_dist <- starting_size_dist[[1]]
 
 # Separating out condition 
-methods <- method_options$initial$methods
-coverage <- method_options$initial$erad_coverage
-primary_sampling_period <- method_options$initial$primary_sampling_period
-erad_quarters <- method_options$initial$erad_quarters
-erad_days <- method_options$initial$erad_days
-ADS_overlap <- method_options$initial$ADS_overlap_on_transect
-num_teams <- method_options$initial$num_teams
+methods <- method_options[[2]]$methods
+coverage <- method_options[[2]]$erad_coverage
+primary_sampling_period <- method_options[[2]]$primary_sampling_period
+erad_quarters <- method_options[[2]]$erad_quarters
+erad_days <- method_options[[2]]$erad_days
+ADS_overlap <- method_options[[2]]$ADS_overlap_on_transect
+num_teams <- method_options[[2]]$num_teams
 
 # Running IBM model with initial conditions
 erad_quarter_results <- quarter_operations(initial_N = N, 
@@ -1339,4 +1330,42 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
   theme_bw() +
   scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
 
+```
+
+```{r strategy_3_run_estimation_once}
+
+### Running estimation model once 
+
+# Transforming multiple IBM runs into one dataset 
+
+# Estimation model set up
+estimation_inputs <- estimation_inputs_fun(erad_quarter_results$all_observed,
+                                           erad_quarter_results$all_effort)
+
+# Call JAGS Function
+output_jags <- jags(data = estimation_inputs$data, 
+                    inits = estimation_inputs$inits, 
+                    parameters.to.save = estimation_inputs$parameters, 
+                    "removal_model_simple_zero-inf.jags", 
+                    n.chains = nc, 
+                    n.thin = nt, 
+                    n.iter = ni,
+                    n.burnin = nb)
+
+saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_three", "Estimation",
+"output_jags_test.RDS"))
+
+# Parameter trace plots
+traceplot(output_jags, parameters = c("r1", "r2", "r3", "r4"))
+traceplot(output_jags, parameters = "p")
+traceplot(output_jags, parameters = "psi")
+
+# Mean N estimates vs simulated real N
+est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
+                                       all_quarters = erad_quarter_results$all_quarters,
+                                       observed_erad_quarters = estimation_inputs$obs_quarters,
+                                       observed_erad_days = estimation_inputs$obs_days)
+
+## Testing to see if any thresholds are met
+condition <- strat_3_threshold_fun(est_v_sim_N_plots$mean_N_df) 
 ```
