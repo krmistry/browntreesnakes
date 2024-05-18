@@ -300,8 +300,12 @@ eradication_fun <- function(encounter_pop,
                             mortality_prob,
                             method,
                             num_vis_teams) {
-  # # Separating out the proportion of the population that will be affected by eradication (coverage) from the non-encountering population
-  # encounter_pop <- slice_sample(day_pop, prop = coverage)
+
+  # For visual surveys only, the encounter probability can be increased if multiple teams are used on the same transects on the same days
+  if(method == "visual") {
+    mortality_prob <- mortality_prob*num_vis_teams
+  }
+  
   # no_encounter_pop <- day_pop[!day_pop$ID %in% encounter_pop$ID, ]
   # If snake is in the size range to be affected, perform Bernoulli draw to determine if it encounters the method (encounter = mortality for now)
   for(snake in 1:nrow(encounter_pop)) {
@@ -314,10 +318,6 @@ eradication_fun <- function(encounter_pop,
       }
     } else if(method %in% erad_methods[c(2,3)]) {
       size_class <- size_class_fun(encounter_pop$SVL[snake])
-      # For visual surveys only, the encounter probability can be increased if multiple teams are used on the same transects on the same days
-        if(method == "visual") {
-          mortality_prob <- mortality_prob*num_vis_teams
-        }
       if (rbinom(1, 1, prob = mortality_prob[size_class]) == 1) { 
         encounter_pop$encounter[snake] <- 1
       } else {
@@ -648,7 +648,7 @@ daily_operations <- function(first_day_pop,
       if(quarter %in% unique(unlist(erad_quarters))) {
         # and if the current day is within the primary sampling period, then no natural 
         # mortality occurs, only individual size growth (not including reproducing females)
-        if(day > primary_sampling_period[1] & day < primary_sampling_period[2]) {
+        if(day >= primary_sampling_period[1] & day <= primary_sampling_period[2]) {
           # Excluding reproductive females to create population who has the potential to grow in this quarter
           growing_pop <- pop[!pop$ID %in% moms$ID, ]
           # Checking to make sure there are any non-mom snakes who can grow
@@ -730,7 +730,8 @@ daily_operations <- function(first_day_pop,
       if(length(today_methods) > 0) {
         # If any snakes died before the start of the primary sampling period of natural 
         # causes, remove from the ID lists (performed every day, but should only make 
-        # any difference outside of the primary sampling period)
+        # any difference outside of the primary sampling period) - this is also when 
+        # current moms are taken out of the encounter population
         if(nrow(daily_pop[[1]]) > nrow(growing_pop)) {
           dead_snake_IDs <- setdiff(daily_pop[[1]]$ID, growing_pop$ID)
           ADS_remove <- which(ADS_pop_IDs %in% dead_snake_IDs)
@@ -1060,7 +1061,7 @@ quarter_operations <- function(initial_N,
   }
   # print("initial_pop created")
   for(quarter in 1:total_quarters) {
-    #tic(paste0("Quarter ", quarter))
+    tic(paste0("Quarter ", quarter))
     # Check if the population has gone to 0
     if(nrow(quarter_timeseries_pop[[quarter]]) == 0) {
       print("Population eradicated")
@@ -1145,7 +1146,7 @@ quarter_operations <- function(initial_N,
     # Saving before and after eradication populations
     quarter_pops_before_erad[[quarter]] <- daily_results$day_before_erad_pop
     quarter_pops_after_erad[[quarter]] <- daily_results$day_after_erad_pop
-    #toc()
+    toc()
     
   }
   # Formating quarter results for plotting
