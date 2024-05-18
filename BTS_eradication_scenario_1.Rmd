@@ -21,6 +21,12 @@ source(here("Scripts/00_user_inputs.R"))
 source(here("Scripts/01_model_functions.R"))
 source(here("Scripts/02_results_functions.R"))
 source(here("Scripts/model_evaluation.R"))
+
+num_alternatives <- 2
+num_variants <- 50
+
+area_size <- 50 
+erad_quarters$visual <- c(1:4) # Same for both, needed for plotting
 ```
 
 ## Target area for eradication
@@ -448,8 +454,6 @@ for(variant in 1:num_variants) {
 
 ```
 
-
-
 ```{r estimation_test}
 erad_reformatted_v2 <- all_observations_fun(erad_results_ts = erad_results_list[[1]],
                                               methods = obs_methods)
@@ -767,8 +771,6 @@ variants_plot_2 <- ggplot(erad_plot_data_melted_2, aes(x = Quarter, y = N, color
 
 ```
 
-
-
 ```{r jags_model_1_method}
 
 # JAGS Removal Estimation Model - simple growth version 
@@ -858,7 +860,6 @@ for(t in 1:Q) { #start primary sampling period loop
 ", fill= TRUE)
 sink()
 ```
-
 
 ```{r alternative_2_estimation}
 
@@ -993,8 +994,6 @@ est_v_sim_N_plot_list[[variant]] <- estimated_N_plots(jags_output = jags_output_
 
 ```
 
-
-
 ```{r alternative_2_metrics}
 
 IBM_results <- readRDS(here("Results", "scenario_1", "IBM_outputs_alt_2_50.RDS"))
@@ -1013,8 +1012,6 @@ saveRDS(model_metrics, file = here("Results", "scenario_1", "alt_2_model_metrics
 
 
 ```
-
-
 
 ```{r model_metrics_fun}
 
@@ -1136,8 +1133,6 @@ threshold_fun <- function(threshold,
   
 
 ```
-
-
 
 #### Cost calculation for each scenario
 
@@ -1463,6 +1458,9 @@ colnames(alt_costs_long)[2:3] <- c("method", "Dollars")
 
 per_method_costs_plot <- ggplot(alt_costs_long, aes(x = method, y = Dollars, fill = alternative)) +
   geom_bar(stat = "identity", position = position_dodge()) +
+  scale_x_discrete(labels = plot_labels$method) +
+  scale_fill_hue(labels = plot_labels$alternative) +
+  labs(x = "Method", fill = "") +
   theme_bw()
 
 ```
@@ -1470,8 +1468,8 @@ per_method_costs_plot <- ggplot(alt_costs_long, aes(x = method, y = Dollars, fil
 ```{r plot_setup}
 
 plot_labels <- list()
-plot_labels$alternative <- c("alt_1" = "Alternative 1",
-                             "alt_2" = "Alternative 2")
+plot_labels$alternative <- c("alt_1" = "All-out",
+                             "alt_2" = "ADS-focused")
 plot_labels$size_class <- c("small" = "Small",
                             "medium" = "Medium",
                             "large" = "Large",
@@ -1618,7 +1616,7 @@ alt_data <- list()
 for(alt in 1:num_alternatives) {
   variant_melted <- list()
   for(variant in 1:num_variants) {
-   variant_melted[[variant]] <- melt(alt_model_metrics[[alt]][[variant]]$summed_data[,-6], id.vars = "Quarter")
+   variant_melted[[variant]] <- melt(alt_model_metrics[[alt]][[variant]]$summed_data, id.vars = "Quarter")
    colnames(variant_melted[[variant]])[c(2:3)] <- c("size_class", "N")
   }
   real_data_all_variants <- melt(variant_melted, id.vars = c("Quarter", "size_class", "N"))
@@ -1635,11 +1633,17 @@ all_alt_data$var_alt <- paste0(all_alt_data$variant, "_", all_alt_data$alternati
 real_data_plot <- ggplot(all_alt_data, aes(x = Quarter, y = N, color = alternative)) +
   geom_path(aes(group = var_alt)) +
   geom_point(show.legend = FALSE) +
-  facet_wrap(vars(size_class), labeller = labeller(size_class = plot_labels$size_class)) +
-  scale_color_manual(values = colors$alt, 
-                     labels = plot_labels$alternative) +
+  #facet_wrap(vars(size_class), labeller = labeller(size_class = plot_labels$size_class)) +
+  # facet_grid(alternative ~ size_class, scales = "free_y",
+  #              labeller = labeller(alternative = plot_labels$alternative, size_class = plot_labels$type_of_N)) +
+    facet_grid(cols = vars(size_class), scales = "free_y",
+               labeller = labeller(size_class = plot_labels$type_of_N)) +
+  scale_color_manual(values = colors$alt,
+                     labels = plot_labels$alternative, 
+                     guide = guide_legend(position = "bottom")) +
   labs(y = "Population", color = "") +
-  theme_bw() 
+  theme_bw() +
+  theme(legend.position = "top")
 
 ## Plots to represent estimated Ns 
 alt_results <- list()
@@ -2138,11 +2142,12 @@ all_final_density$color[blue_rows] <- "alt_2"
 all_final_density$color[black_rows] <- "simulated"
 
                         
-final_density_plot <- ggplot(all_final_density) +
-  geom_boxplot(aes(x = source, y = density, color = color)) +
-  facet_grid(alternative ~ type_of_N, labeller = labeller(type_of_N = plot_labels$type_of_N, alternative = plot_labels$alternative)) +
-  scale_color_manual(values = colors$source_alt,
-                     labels = c("simulated" = "Simulated \n data", plot_labels$alternative)) +
+final_density_plot <- ggplot(all_final_density[all_final_density$source == "simulated",]) +
+  geom_boxplot(aes(x = type_of_N, y = density, color = alternative)) +
+  #facet_grid(vars(alternative), labeller = labeller(alternative = plot_labels$alternative)) +
+  scale_x_discrete(labels = plot_labels$type_of_N) + 
+  scale_color_manual(values = colors$alt,
+                     labels = plot_labels$alternative) +
   theme_bw() + 
   labs(color = "", y = "Density (snakes per ha)", x = "")
 
@@ -2398,13 +2403,45 @@ effort_plot_1 <- ggplot(all_effort, aes(x = quarter, fill = method)) +
 
 effort_plot_2 <- ggplot(all_effort, aes(fill = method, x = week)) +
   geom_bar(stat = "count", position = "dodge") +
-  facet_grid(quarter ~ alternative) +
+  facet_grid(quarter ~ alternative, labeller = labeller(alternative = plot_labels$alternative)) +
+  scale_fill_hue(labels = plot_labels$method) +
   labs(y = "Number of Days", fill = "Method", x = "Week") +
   theme_bw()
 
 ```
 
+## Plots and graphics used in DoD report
 
+```{r all_report_graphics}
 
+# Figure 5
+effort_plot_2
 
+# Figure 6
+observed_plot
 
+# Figure 7
+real_data_plot
+
+# Figure 8 - still needs updating with 95% CIs for total pop
+all_est_N_vs_data_plot
+
+# Figure 9
+RMSE_plot
+
+# Figure 10
+PRD_plot
+
+# Figure 11
+coverage_plot
+
+# Figure 12
+final_density_plot
+
+# Figure 13 - still need to update per my comment in Word
+density_threshold_plot
+
+# Figure A1
+per_method_costs_plot
+
+```
