@@ -88,9 +88,8 @@ strat_2_parallel_fun <- function(P,
     IBM_effort_results[[t]] <- IBM_results[[t]]$all_effort
     # Correcting the quarters in the IBM that just ran if t > 1, after removing the final quarter (which is just the starting values)
     IBM_results[[t]]$all_quarters <- IBM_results[[t]]$all_quarters[IBM_results[[t]]$all_quarters$Quarter %in% c(1:erad_quarter_time_step),]
-    if(t > 1) {
-      IBM_results[[t]]$all_quarters$Quarter <- IBM_results[[t]]$all_quarters$Quarter + t
-    }
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 1] <- t*2 - 1
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*2
     
     # Save IBM results from this run
     saveRDS(IBM_results, file = here("Results", "alt_strategies", "Strategy_two", "IBM", 
