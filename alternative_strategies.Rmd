@@ -468,7 +468,6 @@ results <- foreach(variant = 1:length(N_reps)) %dopar% {
 stopCluster(cl = cl)
 ```
 
-
 ### Strategy 2: Experimental approach (medium to high effort with all methods, using many thresholds)
 
 -   Run for maximum of 10 years
@@ -884,8 +883,7 @@ while(t <= final_time_step) {
                                            last_quarter_df = last_quarter_df,
                                            num_teams = num_teams)
   
-    # Save IBM results from this run
-      saveRDS(IBM_results, file = here("Results", "alt_strategies", "Strategy_two", "IBM", paste0("IBM_results_test_IBM_set-", t, ".rds")))
+
     
   # Saving IBM observed and effort from this run
   #if(t == 1) {
@@ -893,9 +891,12 @@ while(t <= final_time_step) {
     IBM_effort_results[[t]] <- IBM_results[[t]]$all_effort
     # Correcting the quarters in the IBM that just ran if t > 1, after removing the final quarter (which is just the starting values)
     IBM_results[[t]]$all_quarters <- IBM_results[[t]]$all_quarters[IBM_results[[t]]$all_quarters$Quarter %in% c(1:erad_quarter_time_step),]
-    if(t > 1) {
-      IBM_results[[t]]$all_quarters$Quarter <- IBM_results[[t]]$all_quarters$Quarter + t
-    }
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 1] <- t*2 - 1
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*2
+    
+    # Save IBM results from this run
+      saveRDS(IBM_results, file = here("Results", "alt_strategies", "Strategy_two", "IBM", paste0("IBM_results_test_IBM_set-", t, ".rds")))
+    
     # Saving all IBM quarter results
     IBM_all_quarters <- rbind(IBM_all_quarters, IBM_results[[t]]$all_quarters)
       
@@ -1002,7 +1003,11 @@ A strategy with no ADS but a high amount of transect-based effort, geared toward
 
 -   Threshold 1: estimated mean density of extra-large size class is 0 for \>=2 quarters
 
-    -   If met: stop all methods for 2 quarters, do 1 rounds of low effort visual survey (2 weeks, 4 teams) in 3rd and 4th quarters
+    -   If met: stop all methods for 2 quarters, do 1 rounds of low effort visual survey (3 weeks, 3 teams) in 3rd and 4th quarters
+
+-   Threshold 2: estimation mean density of extra-large size class increases above 0
+
+    -   Return to initial methods
 
 -   Estimate population every 4 quarters
 
@@ -1014,11 +1019,13 @@ A strategy with no ADS but a high amount of transect-based effort, geared toward
 
         -   This means that one team could survey or check traps on all transects in 29 days, or two teams could do it 15 days
 
-    -   Visual surveys occur every other day for 9 weeks, but only 3 weeks of that is the primary sampling period (the other 6 weeks overlap with bait tubes)
+    -   Visual surveys occur every other day for 9 weeks (but only 3 weeks of that is the primary sampling period (the other 6 weeks overlap with bait tubes)
 
-        -   This means that 1 team can cover the entire area each quarter (some overlap would occur, but that wouldn't change the coverage parameter since 100% coverage is the maximum). It would change the encounter probability though - however, since 31 days is only 2 days more than 29, I'll operate as though encounter is based on just 1 team. Increasing effort, though, would require increasing the number of teams (and therefore the encounter probability), in the threshold 1 scenario
+        -   This means that 1 team can cover the entire area each quarter with initial methods (some overlap would occur, but that wouldn't change the coverage parameter since 100% coverage is the maximum). It would change the encounter probability though - however, since 34 days is only 5 days more than 29, I'll operate as though encounter is based on just 1 team. Increasing effort, though, would require increasing the number of teams (and therefore the encounter probability), in the threshold 1 scenario
 
-            -   Going with 100% coverage with four teams
+            -   Going with 100% coverage with 1 team (since they're spatially separated)
+
+        -   For threshold 1 methods, there are only 10 days of sampling, so it would take 3 teams to cover the whole area once
 
     -   Traps are checked every 3rd day for the same 9 weeks (same overlapping with bait tubes as visual survey, so 3 weeks)
 
@@ -1056,7 +1063,7 @@ strat_3_threshold_fun <- function(mean_N_df,
   ## Threshold 1: Estimated mean density is of x-large size class is <=0.01 snake/ha 
   if(xlarge_mean_density <= xlarge_density) {
     condition <- "threshold_1"
-  }  
+  } 
   
   return(condition)
 }
@@ -1112,15 +1119,18 @@ for(quarter in 1:erad_quarter_time_step) {
   method_options$threshold_1$erad_days[[quarter]] <- list()
 }
 for(quarter in method_options$threshold_1$erad_quarters$visual) {
-  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
-  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, 7*2, 2)
+  # Visual survey: medium effort (3 weeks, 4 teams) per quarter - surveying every other day
+  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2,(7*3 - 1), 2)
 }
 names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
 
 
 # Bounds of primary sampling periods for each condition (different for each)
-method_options$initial$primary_sampling_period <- c(2,(7*3 - 1))
-method_options$threshold_1$primary_sampling_period <- c(2, 7*2)
+for (condition in 1:length(method_option_names)){
+  method_options[[condition]]$primary_sampling_period <- c(2,(7*3 - 1))
+}
+
+#method_options$threshold_1$primary_sampling_period <- c(2, 7*2)
 
 
 ## Coverage for each method in a quarter for each condition
@@ -1145,8 +1155,8 @@ for(option in 1:length(method_options)) {
   method_options[[option]]$num_teams <- list()
 }
 
-method_options$initial$num_teams$visual <- 4
-method_options$threshold_1$num_teams$visual <- 2
+method_options$initial$num_teams$visual <- 1 # 2 teams when calculating cost
+method_options$threshold_1$num_teams$visual <- 1 # 3 teams when calculating cost
 
 ```
 
@@ -1158,13 +1168,13 @@ N <- starting_pop[[1]][1]
 size_dist <- starting_size_dist[[1]]
 
 # Separating out condition 
-methods <- method_options[[2]]$methods
-coverage <- method_options[[2]]$erad_coverage
-primary_sampling_period <- method_options[[2]]$primary_sampling_period
-erad_quarters <- method_options[[2]]$erad_quarters
-erad_days <- method_options[[2]]$erad_days
-ADS_overlap <- method_options[[2]]$ADS_overlap_on_transect
-num_teams <- method_options[[2]]$num_teams
+methods <- method_options[[1]]$methods
+coverage <- method_options[[1]]$erad_coverage
+primary_sampling_period <- method_options[[1]]$primary_sampling_period
+erad_quarters <- method_options[[1]]$erad_quarters
+erad_days <- method_options[[1]]$erad_days
+ADS_overlap <- method_options[[1]]$ADS_overlap_on_transect
+num_teams <- method_options[[1]]$num_teams
 
 # Running IBM model with initial conditions
 erad_quarter_results <- quarter_operations(initial_N = N, 
