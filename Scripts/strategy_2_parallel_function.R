@@ -103,14 +103,19 @@ strat_2_parallel_fun <- function(P,
     combined_observed <- unlist(IBM_observed_results, recursive = FALSE)
     combined_effort <- unlist(IBM_effort_results, recursive = FALSE)
     for(quarter in 1:length(combined_observed)) {
-      if(nrow(combined_observed[[quarter]]) > 0) {
+      if(length(combined_observed[[quarter]] > 0 ) {
         combined_observed[[quarter]]$quarter <- quarter
       } else {
-        combined_observed[[quarter]][1,] <- NA
-        combined_observed[[quarter]]$quarter <- NA
-        combined_observed[[quarter]] <- combined_observed[[quarter]][0,]
+        combined_observed[[quarter]] <- combined_observed[[quarter-1]][0,]
       }
-      combined_effort[[quarter]]$quarter <- quarter
+      # if(nrow(combined_observed[[quarter]]) > 0) {
+      #   combined_observed[[quarter]]$quarter <- quarter
+      # } else {
+      #   combined_observed[[quarter]][1,] <- NA
+      #   combined_observed[[quarter]]$quarter <- NA
+      #   combined_observed[[quarter]] <- combined_observed[[quarter]][0,]
+      # }
+       combined_effort[[quarter]]$quarter <- quarter
     }
     # # Combining the erad_days from all previous runs
     # combined_erad_days <- unlist(estimation_effort_record$erad_days, recursive = FALSE)
