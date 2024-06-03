@@ -119,7 +119,7 @@ parallel_fun <- function(P,
     combined_observed <- unlist(IBM_observed_results, recursive = FALSE)
     combined_effort <- unlist(IBM_effort_results, recursive = FALSE)
     for(quarter in 1:length(combined_observed)) {
-      if(nrow(combined_observed[[quarter]]) > 0 ) {
+      if(nrow(combined_observed[[quarter]]) > 0 && length(combined_observed[[quarter]]) > 0) {
         combined_observed[[quarter]]$quarter <- quarter
       } 
       combined_effort[[quarter]]$quarter <- quarter
@@ -168,19 +168,19 @@ parallel_fun <- function(P,
   return(estimation_effort_record$condition)
 }
 
-test <- parallel_fun(P = 2,
-                     D = 1,
-                     final_time_step = 2,
-                     variant = 1,
-                     threshold_fun = strat_3_threshold_fun,
-                     strategy_name = "Strategy_three",
-                     quarter_time_step = 4)
-
-test_output_IBM <- readRDS(file = here("Results", "alt_strategies", "Strategy_two", "IBM",
-                                        paste0("IBM_results_parallel_test_variant-", 1, "_IBM_set-", 2, ".rds")))
-test_output_jags <- readRDS(file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
-                                         paste0("output_jags_paralell_test_variant-",1, "_est_", 2, ".RDS")))
-
+# test <- parallel_fun(P = 2,
+#                      D = 1,
+#                      final_time_step = 2,
+#                      variant = 1,
+#                      threshold_fun = strat_3_threshold_fun,
+#                      strategy_name = "Strategy_three",
+#                      quarter_time_step = 4)
+# 
+# test_output_IBM <- readRDS(file = here("Results", "alt_strategies", "Strategy_two", "IBM",
+#                                         paste0("IBM_results_parallel_test_variant-", 1, "_IBM_set-", 2, ".rds")))
+# test_output_jags <- readRDS(file = here("Results", "alt_strategies", "Strategy_two", "Estimation",
+#                                          paste0("output_jags_paralell_test_variant-",1, "_est_", 2, ".RDS")))
+# 
 
 
 
