@@ -137,6 +137,19 @@ parallel_fun <- function(P,
                         n.thin = nt,
                         n.iter = ni,
                         n.burnin = nb)
+    if(length(IBM_results[[t]]$all_quarters) < quarter_time_step+1) {
+      saveRDS(output_jags, file = here("Results", "alt_strategies", strategy_name, "Estimation",
+                                       paste0("output_jags_sum_start_pop_", names(starting_pop)[P], "_", 
+                                              names(starting_size_dist)[D], "_variant-",variant, "_est_", t, ".RDS")))
+      saveRDS(estimation_effort_record, file = here("Results", "alt_strategies", strategy_name, "IBM", 
+                                                    paste0("effort_record_start_pop_", names(starting_pop)[P], "_", 
+                                                           names(starting_size_dist)[D], "_variant-", variant, ".rds")))
+      saveRDS(IBM_all_quarters, file = here("Results", "alt_strategies", strategy_name, "IBM", 
+                                            paste0("IBM_all_quarters_start_pop_", names(starting_pop)[P], "_", 
+                                                   names(starting_size_dist)[D], "_variant-", variant, ".rds")))
+      break
+    }
+    
     if(t %in% c(1:5, 10, 15, 20)) {
       saveRDS(output_jags, file = here("Results", "alt_strategies", strategy_name, "Estimation",
                                        paste0("output_jags_sum_start_pop_", names(starting_pop)[P], "_", 
