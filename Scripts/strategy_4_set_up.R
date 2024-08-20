@@ -53,7 +53,7 @@ for(quarter in method_options$threshold_1$erad_quarters$visual) {
 names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
 
 
-# Bounds of primary sampling periods for each condition (different for each)
+# Bounds of primary sampling periods for each condition 
 for (condition in 1:length(method_option_names)){
   method_options[[condition]]$primary_sampling_period <- c(2,(7*3 - 1))
 }
@@ -81,11 +81,20 @@ method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
 # Number of visual survey teams for each method
 for(option in 1:length(method_options)) {
   method_options[[option]]$num_teams <- list()
+  method_options[[option]]$cost_num_teams <- list()
 }
-
-method_options$initial$num_teams$visual <- 1 # 2 teams when calculating cost
-method_options$threshold_1$num_teams$visual <- 1 # 3 teams when calculating cost
-
+# This one is used to calculate the spatial coverage 
+# (there might be more than one team, but if they don't overlap spatially, then the encounter
+# probability will be the same as if its one team)
+method_options$initial$num_teams$visual <- 1 
+method_options$threshold_1$num_teams$visual <- 1 
+# This one is used to calculate the cost, so its the actual number of teams per quarter
+# Initial
+method_options$initial$cost_num_teams$visual <- 1
+method_options$initial$cost_num_teams$trap <- 2
+method_options$initial$cost_num_teams$bait_tube <- 1
+# Threshold 1
+method_options$threshold_1$cost_num_teams$visual <- 3
 
 
 

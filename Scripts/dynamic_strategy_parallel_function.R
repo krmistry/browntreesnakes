@@ -101,10 +101,10 @@ parallel_fun <- function(P,
       IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*2 
     } 
     if(quarter_time_step == 4) {
-      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 1] <- t*2 - 3
-      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*2 - 2
-      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 3] <- t*2 - 1
-      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 4] <- t*2 
+      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 1] <- t*4 - 3
+      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*4 - 2
+      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 3] <- t*4 - 1
+      IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 4] <- t*4 
     }
     
     # Save IBM results from this run

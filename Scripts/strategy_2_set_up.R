@@ -5,7 +5,7 @@
 erad_quarter_time_step <- 2
 
 # Methods for all evenatualities; starting, threshold 1, threshold 2 and threshold 3
-method_option_names <- c("initial", paste0("threshold_", c(1:3)))
+method_option_names <- c("initial", paste0("threshold_", c(1:2)))
 method_options <- list()
 for(option in 1:length(method_option_names)) {
   method_options[[option]] <- list()
@@ -16,7 +16,7 @@ names(method_options) <- method_option_names
 method_options$initial$methods <- erad_methods
 method_options$threshold_1$methods <- erad_methods[2]
 method_options$threshold_2$methods <- erad_methods
-method_options$threshold_3$methods <- erad_methods[2]
+#method_options$threshold_3$methods <- erad_methods[2]
 
 ## Quarters where eradication methods are used for each condition
 # All methods used in all quarters for first 3 conditions
@@ -27,7 +27,7 @@ for(option in 1:3) {
   }
 }
 # Condition 4 only has methods occurring in 2nd quarter
-method_options$threshold_3$erad_quarters <- 2
+#method_options$threshold_3$erad_quarters <- 2
 
 ## Days where eradication methods are used for each condition
 # Initial condition days
@@ -57,13 +57,13 @@ names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quart
 # Threshold 2 days (same as initial - coverage is what expands)
 method_options$threshold_2$erad_days <- method_options$initial$erad_days
 
-# Threshold 3 days (no effort in first quarter, with visual effort in the 2nd quarter)
-method_options$threshold_3$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$threshold_3$erad_days[[quarter]] <- list()
-  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
-}
-names(method_options$threshold_3$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
+# # Threshold 3 days (no effort in first quarter, with visual effort in the 2nd quarter)
+# method_options$threshold_3$erad_days <- list()
+# for(quarter in 1:erad_quarter_time_step) {
+#   method_options$threshold_3$erad_days[[quarter]] <- list()
+#   method_options$threshold_3$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
+# }
+# names(method_options$threshold_3$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
 
 
 
@@ -95,20 +95,37 @@ method_options$threshold_2$erad_coverage$ADS <- 1
 # Transect coverage (100%)
 method_options$threshold_2$erad_coverage$transects_per_quarter <- 1
 
-# Threshold 3 condition coverage
-method_options$threshold_3$erad_coverage$ADS <- 0 # necessary for a function,
-# Transect coverage (~50%)
-method_options$threshold_3$erad_coverage$transects_per_quarter <- 0.5
+# # Threshold 3 condition coverage
+# method_options$threshold_3$erad_coverage$ADS <- 0 # necessary for a function,
+# # Transect coverage (~50%)
+# method_options$threshold_3$erad_coverage$transects_per_quarter <- 0.5
 
 # Number of visual survey teams for each method
 for(option in 1:length(method_options)) {
   method_options[[option]]$num_teams <- list()
+  method_options[[option]]$cost_num_teams <- list()
 }
-
+# This one is used to calculate the spatial coverage 
+# (there might be more than one team, but if they don't overlap spatially, then the encounter
+# probability will be the same as if its one team)
 method_options$initial$num_teams$visual <- 1
 method_options$threshold_1$num_teams$visual <- 1
 method_options$threshold_2$num_teams$visual <- 1
-method_options$threshold_3$num_teams$visual <- 1
+# method_options$threshold_3$num_teams$visual <- 1
+# This one is used to calculate the cost, so its the actual number of teams per quarter
+# Initial 
+method_options$initial$cost_num_teams$visual <- 1
+method_options$initial$cost_num_teams$trap <- 1
+method_options$initial$cost_num_teams$bait_tube <- 1
+# Threshold 1
+method_options$threshold_1$cost_num_teams$visual <- 2
+# Threshold 2
+method_options$threshold_2$cost_num_teams$visual <- 2
+method_options$threshold_2$cost_num_teams$trap <- 2
+method_options$threshold_2$cost_num_teams$bait_tube <- 1
+# # Threshold 3
+# method_options$threshold_3$cost_num_teams$visual <- 1
+
 
 ## Function to evaluate the thresholds for strategy 2
 strat_2_threshold_fun <- function(mean_N_df,
@@ -146,10 +163,10 @@ strat_2_threshold_fun <- function(mean_N_df,
     condition <- "threshold_2"
   }
   
-  ## Threshold 3: Estimated mean density of entire population is =< 0.01 snakes/ha for at least 2 quarters
-  if(total_mean_density <= total_threshold) {
-    condition <- "threshold_3"
-  }
+  # ## Threshold 3: Estimated mean density of entire population is =< 0.01 snakes/ha for at least 2 quarters
+  # if(total_mean_density <= total_threshold) {
+  #   condition <- "threshold_3"
+  # }
   
   return(condition)
 }

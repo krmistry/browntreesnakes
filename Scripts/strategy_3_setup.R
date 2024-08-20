@@ -72,10 +72,18 @@ method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
 # Number of visual survey teams for each method
 for(option in 1:length(method_options)) {
   method_options[[option]]$num_teams <- list()
+  method_options[[option]]$cost_num_teams <- list()
 }
-
+# This one is used to calculate the spatial coverage 
+# (there might be more than one team, but if they don't overlap spatially, then the encounter
+# probability will be the same as if its one team)
 method_options$initial$num_teams$visual <- 1
 method_options$threshold_1$num_teams$visual <- 1
+# This one is used to calculate the cost, so its the actual number of teams per quarter
+method_options$initial$cost_num_teams$visual <- 2
+method_options$threshold_1$cost_num_teams$visual <- 2
+
+
 
 # Function to evaluate if threshold conditions are met
 strat_3_threshold_fun <- function(mean_N_df,
