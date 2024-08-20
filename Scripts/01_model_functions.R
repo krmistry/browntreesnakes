@@ -37,6 +37,24 @@ maturity_fun <- function(snake_SVL) {
   return(maturity)
 }
 
+### Function to create density dependent parameter for reproduction
+## Inputs
+# - K = carrying capacity-type value (based on very high density/ha), which controls the 
+#       variance of the half-normal distribution
+# - current_density = the current total population
+DD_param_fun <- function(K,
+                         current_density) {
+  # Calculate sigma for scaling standard deviation using carrying capacity
+  sd <- (K*0.975)/1.96
+  # Calculate PDF when density is 0 (highest density probability value)
+  max_prob_value <- fdrtool::dhalfnorm(0, theta = ((sqrt(pi/2))/sd)) 
+  # Calculate PDF value for the current density
+  PDf_value <- fdrtool::dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
+  # Use maximum value to scale current density's PDF value and produce A parameter
+  p <- (PDf_value/max_prob_value)
+  return(p)
+}
+
 
 ### Function to select females that will reproduce in this quarter
 ## Inputs
@@ -67,7 +85,6 @@ repro_females_fun <- function(start_pop,
   
   return(moms)
 }
-
 
 ### Function to generate offspring
 ## Inputs
@@ -159,25 +176,6 @@ daily_mortality_fun <- function(pop,
   
   return(list(surviving_pop = pop_2,
               num_dead_snakes = length(dead_snakes)))
-}
-
-
-### Function to create density dependent parameter for reproduction
-## Inputs
-# - K = carrying capacity-type value (based on very high density/ha), which controls the 
-#       variance of the half-normal distribution
-# - current_density = the current total population
-DD_param_fun <- function(K,
-                         current_density) {
-  # Calculate sigma for scaling standard deviation using carrying capacity
-  sd <- (K*0.975)/1.96
-  # Calculate PDF when density is 0 (highest density probability value)
-  max_prob_value <- fdrtool::dhalfnorm(0, theta = ((sqrt(pi/2))/sd)) 
-  # Calculate PDF value for the current density
-  PDf_value <- fdrtool::dhalfnorm(current_density, theta = ((sqrt(pi/2))/sd))
-  # Use maximum value to scale current density's PDF value and produce A parameter
-  p <- (PDf_value/max_prob_value)
-  return(p)
 }
 
 
