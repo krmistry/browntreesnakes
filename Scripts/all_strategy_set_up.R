@@ -46,7 +46,8 @@ starting_size_dist <- list()
 starting_size_dist$more_small <- c(0.42, rep((1-0.42)/3,3))
 starting_size_dist$more_xlarge <- c(rep((1-0.42)/3,3), 0.42)
 
-
+# Number of variants for each permutation
+num_variants <- 50
 
 # JAGS Removal Estimation Model - simple growth with zero inflation
 sink("removal_model_alt_strategies.jags")
