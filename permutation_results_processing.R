@@ -274,18 +274,151 @@ objectives_plot_by_strategy <- ggplot(all_objs_probs) +
 ggsave(filename = paste0(save_folder, "_objs_comparison_by_strategy_plot.png"),
        objectives_plot_by_strategy, device = 'png', width = 6, height = 4)
 
-## Average costs
+## Cost calculations for strategies (dynamic strategies use means across variants)
+indiv_cost_categories <- c("transects", erad_methods)
 
-# for strategies 3 and 4
-
-summed_costs <- as.data.frame(matrix(NA, nrow = num_variants, ncol = 2))
-colnames(summed_costs) <- c("summed_cost", "variant")
-summed_costs$variant <- c(1:num_variants)
-for(variant in 1:num_variants) {
-  variant_costs <- permutation_costs$low_more_xlarge$Strategy_three[permutation_costs$low_more_xlarge$Strategy_three$variant == variant,]
-  summed_costs$summed_cost[variant] <- sum(variant_costs$dollars)
+mean_permutation_costs <- list()
+# For each permutation
+for(permutation_name in permutations) {
+  strategy_costs <- list()
+  # For strategy one (static strategy)
+  strategy_costs$Strategy_one <- as.data.frame(matrix(NA, nrow = length(indiv_cost_categories), 
+                                                      ncol = 2))
+  colnames(strategy_costs$Strategy_one) <- c("method", "mean_cost")
+  strategy_costs$Strategy_one$method <- indiv_cost_categories
+  strategy_costs$Strategy_one$mean_cost <- 0
+  strategy_costs$Strategy_one$mean_cost
+  strategy_costs$Strategy_one$mean_cost[strategy_costs$Strategy_one$method == "ADS"] <- permutation_costs[[permutation_name]]$Strategy_one$total_cost$ADS
+  
+  ### For strategy 2 - using max cost, because its really not a huge difference between min and max. 
+  # If the totals are close enough to another strategy that it might affect the optimization, 
+  # then I'll reconsider how to do this
+  strategy <- strategies[2]
+  summed_costs <- as.data.frame(matrix(NA, nrow = num_variants, ncol = 6))
+  colnames(summed_costs) <- c("variant",indiv_cost_categories)
+  summed_costs$variant <- c(1:num_variants)
+  for(variant in 1:num_variants) {
+    # Combine all costs for each variant
+    variant_costs <- permutation_costs[[permutation_name]][[strategy]][permutation_costs[[permutation_name]][[strategy]]$variant == variant,]
+    # Combine costs for each method for each variant
+    for(method in indiv_cost_categories) {
+      summed_costs[[method]][variant] <- sum(variant_costs$max_dollars[variant_costs$method == method])
+    }
+  }
+  # Calculate mean costs for each strategy (across variants)
+  strategy_costs[[strategy]] <- as.data.frame(matrix(NA, nrow = length(indiv_cost_categories), 
+                                                                ncol = 2))
+  colnames(strategy_costs[[strategy]]) <- c("method", "mean_cost")
+  strategy_costs[[strategy]]$method <- indiv_cost_categories
+  for(method in 1:length(indiv_cost_categories)) {
+    strategy_costs[[strategy]]$mean_cost[method] <- mean(summed_costs[[indiv_cost_categories[method]]])
+  }
+  
+  # For strategies 3 and 4
+  for(strategy in strategies[c(3:4)]) {
+    summed_costs <- as.data.frame(matrix(NA, nrow = num_variants, ncol = 6))
+    colnames(summed_costs) <- c("variant", indiv_cost_categories)
+    summed_costs$variant <- c(1:num_variants)
+    for(variant in 1:num_variants) {
+      # Combine all costs for each variant
+      variant_costs <- permutation_costs[[permutation_name]][[strategy]][permutation_costs[[permutation_name]][[strategy]]$variant == variant,]
+      # summed_costs$summed_cost[variant] <- sum(variant_costs$dollars)
+      # Combine costs for each method for each variant
+      for(method in indiv_cost_categories) {
+        summed_costs[[method]][variant] <- sum(variant_costs$dollars[variant_costs$method == method])
+      }
+    }
+    # Calculate mean costs for each strategy (across variants)
+    strategy_costs[[strategy]] <- as.data.frame(matrix(NA, nrow = length(indiv_cost_categories), 
+                                                                  ncol = 2))
+    colnames(strategy_costs[[strategy]]) <- c("method", "mean_cost")
+    strategy_costs[[strategy]]$method <- indiv_cost_categories
+    for(method in 1:length(indiv_cost_categories)) {
+      strategy_costs[[strategy]]$mean_cost[method] <- mean(summed_costs[[indiv_cost_categories[method]]])
+    }
+    #strategy_costs[[strategy]]$summed_cost <- mean(summed_costs$summed_cost)
+  }
+  
+  mean_permutation_costs[[permutation_name]] <- strategy_costs
 }
-mean_summed_cost <- mean(summed_costs$summed_cost)
+# Combining above into one dataframe with all mean costs
+all_mean_costs <- melt(mean_permutation_costs, id.vars = colnames(mean_permutation_costs[[1]][[1]]))
+colnames(all_mean_costs)[c(3:4)] <- c("strategy", "permutation")
+
+# Combining summed costs and objectives for plotting
+costs_vs_obj_probs <- all_objs_probs
+for(permutation_name in permutations) {
+  for(strategy in strategies) {
+    perm_strat_costs <- all_mean_costs[all_mean_costs$strategy == strategy & 
+                                         all_mean_costs$permutation == permutation_name,]
+    costs_vs_obj_probs$mean_cost[costs_vs_obj_probs$strategy == strategy & costs_vs_obj_probs$permutation == permutation_name] <- sum(perm_strat_costs$mean_cost)
+  }
+}
+
+# Eradication probabilty vs cost plots
+cost_vs_erad_objs_plot_by_permutation <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = erad_prob, x = mean_cost/1000000, color = strategy)) +
+  scale_y_continuous(limits = c(0,1)) +
+  facet_wrap(vars(permutation)) +
+  theme_bw()+
+  #theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.75)) +
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of full eradication")
+
+ggsave(filename = paste0(save_folder, "costs_vs_erad_obj_comparison_by_permutation_plot.png"),
+       cost_vs_erad_objs_plot_by_permutation, device = 'png', width = 6, height = 4)
+
+cost_vs_erad_objs_plot_by_strategy <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = erad_prob, x = mean_cost/1000000, color = permutation)) +
+  scale_y_continuous(limits = c(-0.01,1)) +
+  facet_wrap(vars(strategy)) +
+  theme_bw()+
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of full eradication")
+
+ggsave(filename = paste0(save_folder, "costs_vs_erad_obj_comparison_by_strategy_plot.png"),
+       cost_vs_erad_objs_plot_by_strategy, device = 'png', width = 6, height = 4)
+
+# Upper 3 size class suppression probabilty vs cost plots
+cost_vs_upper_3_objs_plot_by_permutation <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = upper_3_suppress_prob, x = mean_cost/1000000, color = strategy)) +
+  scale_y_continuous(limits = c(0,1)) +
+  facet_wrap(vars(permutation)) +
+  theme_bw()+
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of suppression upper 3 size classes")
+
+ggsave(filename = paste0(save_folder, "costs_vs_upper_3_obj_comparison_by_permutation_plot.png"),
+       cost_vs_upper_3_objs_plot_by_permutation, device = 'png', width = 6, height = 4)
+
+cost_vs_upper_3_objs_plot_by_strategy <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = upper_3_suppress_prob, x = mean_cost/1000000, color = permutation)) +
+  scale_y_continuous(limits = c(-0.01,1)) +
+  facet_wrap(vars(strategy)) +
+  theme_bw()+
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of suppression upper 3 size classes")
+
+ggsave(filename = paste0(save_folder, "costs_vs_upper_3_obj_comparison_by_strategy_plot.png"),
+       cost_vs_upper_3_objs_plot_by_strategy, device = 'png', width = 6, height = 4)
+
+# Total suppression probabilty vs cost plots
+cost_vs_total_supp_objs_plot_by_permutation <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = total_suppress_prob, x = mean_cost/1000000, color = strategy)) +
+  scale_y_continuous(limits = c(0,1)) +
+  facet_wrap(vars(permutation)) +
+  theme_bw()+
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of total population suppression")
+
+ggsave(filename = paste0(save_folder, "costs_vs_total_supp_obj_comparison_by_permutation_plot.png"),
+       cost_vs_total_supp_objs_plot_by_permutation, device = 'png', width = 6, height = 4)
+
+cost_vs_total_supp_objs_plot_by_strategy <- ggplot(costs_vs_obj_probs) +
+  geom_point(aes(y = total_suppress_prob, x = mean_cost/1000000, color = permutation)) +
+  scale_y_continuous(limits = c(-0.01,1)) +
+  facet_wrap(vars(strategy)) +
+  theme_bw()+
+  labs(x = "Projected mean cost (dollars in millions)", y = "Probability of total population suppression")
+
+ggsave(filename = paste0(save_folder, "costs_vs_total_supp_obj_comparison_by_strategy_plot.png"),
+       cost_vs_total_supp_objs_plot_by_strategy, device = 'png', width = 6, height = 4)
+
 
 
 
