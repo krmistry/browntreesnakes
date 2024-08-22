@@ -131,6 +131,7 @@ strat_2_dynamic_strategy_cost_calc <- function(permutation_results,
   min_permutation_cost <- melt(min_variant_cost, id.vars = colnames(min_variant_cost[[1]]))
   colnames(min_permutation_cost)[4] <- "variant"
   max_permutation_cost <- melt(max_variant_cost, id.vars = colnames(max_variant_cost[[1]]))
+  colnames(max_permutation_cost)[4] <- "variant"
   # Format min and max values into one dataframe
   permutation_cost <- cbind(min_permutation_cost$dollars, max_permutation_cost)
   colnames(permutation_cost)[c(1:2)] <- c("min_dollars", "max_dollars")
