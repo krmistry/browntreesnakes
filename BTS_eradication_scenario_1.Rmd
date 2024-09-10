@@ -26,6 +26,7 @@ num_alternatives <- 2
 num_variants <- 50
 
 area_size <- 50 
+erad_quarters <- list()
 erad_quarters$visual <- c(1:4) # Same for both, needed for plotting
 ```
 
@@ -1247,7 +1248,6 @@ freezer_rental_annual <- 32000 # Annual cost from FY22
 
 ### Cost function - currently doesn't include ADS, that needs to be added in
 
-
 cost_function <- function(methods,
                           erad_days,
                           erad_quarters,
@@ -1628,6 +1628,14 @@ all_alt_data <- melt(alt_data, id.vars = colnames(alt_data[[1]]))
 colnames(all_alt_data)[5] <- "alternative"
 all_alt_data$var_alt <- paste0(all_alt_data$variant, "_", all_alt_data$alternative)
 
+# Calculating percentage decline in the total population between the 1st and 4th quarters
+percent_decrease_N <- list()
+for(alt in 1:num_alternatives) {
+  Q1_total_Ns <- alt_data[[alt]]$N[alt_data[[alt]]$size_class == "total" & alt_data[[alt]]$Quarter == 1]
+  Q4_total_Ns <- alt_data[[alt]]$N[alt_data[[alt]]$size_class == "total" & alt_data[[alt]]$Quarter == 4]
+  percent_decrease_N[[alt]] <- (Q1_total_Ns - Q4_total_Ns)/Q1_total_Ns
+}
+
 
 # Plot of all variants real data
 real_data_plot <- ggplot(all_alt_data, aes(x = Quarter, y = N, color = alternative)) +
@@ -1644,6 +1652,7 @@ real_data_plot <- ggplot(all_alt_data, aes(x = Quarter, y = N, color = alternati
   labs(y = "Population", color = "") +
   theme_bw() +
   theme(legend.position = "top")
+
 
 ## Plots to represent estimated Ns 
 alt_results <- list()
@@ -1693,6 +1702,19 @@ for(alt in 1:num_alternatives) {
 
 # Melting alternative strategy results into one dataframe
 names(alt_results) <- paste0("alt_", c(1:2))
+
+## Adding N.sum mean and 95% CIs to alt_results
+estimated_N_sum <- readRDS(here("Results", "DoD_final_report", "all_estimated_N_sum_list.rds"))
+for(alt in 1:num_alternatives) {
+  alt_N_sum <- melt(estimated_N_sum[[alt]], id.vars = colnames(estimated_N_sum[[alt]][[1]]))
+  alt_N_sum$Quarter <- c(1:4)
+  alt_N_sum$size_class <- "total"
+  colnames(alt_N_sum)[c(1:4)] <- c("N", "lower_CI", "upper_CI", "variant")
+  alt_N_sum_melted <- alt_N_sum[, colnames(alt_results[[1]])]
+  alt_results[[alt]] <- rbind(alt_results[[alt]], alt_N_sum_melted)
+}
+
+# Melting alternatives together to plot
 all_alt_results <- melt(alt_results, id.vars = colnames(alt_results[[1]]))
 colnames(all_alt_results)[7] <- "alternative"
 all_alt_results$var_alt <- paste0(all_alt_results$variant, "_", all_alt_results$alternative)
@@ -1714,7 +1736,7 @@ all_est_N_vs_data_plot <- ggplot() +
   geom_ribbon(data = all_alt_results, aes(y = N, x = Quarter, ymin = lower_CI, ymax = upper_CI, fill = alternative, group = var_alt), alpha = 0.02, linetype = 0) +
     geom_path(data = reorder_data, aes(x = Quarter, y = N, group = var_alt, color = "simulated \n data"), color = "black") +
     facet_grid(alternative ~ size_class, scales = "free_y",
-               labeller = labeller(alternative = plot_labels$alternative, size_class = plot_labels$size_class)) +
+               labeller = labeller(alternative = plot_labels$alternative, size_class = plot_labels$type_of_N)) +
     theme_bw() +
     scale_color_manual(name = "", values = c("simulated \n data" = "black",
                                              "alt_1" = hue_pal()(2)[1],
@@ -1722,7 +1744,7 @@ all_est_N_vs_data_plot <- ggplot() +
                        labels = c("simulated \n data" = "Simulated \n data",
                                   "alt_1" = "Alternative 1",
                                   "alt_2" = "Alternative 2")) +
-  guides(fill = "none") +
+  guides(color = "none", fill = "none") +
   labs(y = "Population")
                          
 
@@ -2122,8 +2144,8 @@ for(alt in 1:num_alternatives) {
   for(variant in 1:num_variants) {
     data <- alt_model_metrics[[alt]][[variant]]$summed_data
     results <- alt_model_metrics[[alt]][[variant]]$summed_results$estimated_N
-    final_density$simulated[[alt]][[variant]] <- data[data$Quarter == tail(obs_quarters, n = 1),c(2:6)]/density_threshold
-    final_density$estimated[[alt]][[variant]] <- results[results$Quarter == tail(obs_quarters, n = 1),c(2:6)]/density_threshold
+    final_density$simulated[[alt]][[variant]] <- data[data$Quarter == tail(obs_quarters, n = 1),c(2:6)]/area_size
+    final_density$estimated[[alt]][[variant]] <- results[results$Quarter == tail(obs_quarters, n = 1),c(2:6)]/area_size
   }
 }
 names(final_density$simulated) <- paste0("alt_", c(1:num_alternatives))
@@ -2212,17 +2234,17 @@ all_summed_density$color[pink_rows] <- "alt_1"
 all_summed_density$color[blue_rows] <- "alt_2"
 all_summed_density$color[black_rows] <- "simulated"
 
-density_threshold_plot <- ggplot(all_summed_density) +
-  geom_point(aes(x = source, y = threshold_prob, color = color), size = 2) +
-  geom_hline(aes(yintercept = 0.9)) +
-  facet_grid(alternative ~ type_of_N, labeller = labeller(type_of_N = plot_labels$type_of_N,
-                                                          alternative = plot_labels$alternative)) +
+density_threshold_plot <- ggplot(all_summed_density[all_summed_density$source == "simulated",]) +
+  geom_point(aes(x = alternative, y = threshold_prob, color = alternative), size = 2) +
+  geom_hline(aes(yintercept = 0.95)) +
+  facet_grid(cols = vars(type_of_N), labeller = labeller(type_of_N = plot_labels$type_of_N)) +
   theme_bw() +
-  scale_color_manual(values = colors$source_alt,
-                     labels = c("simulated" = "Simulated \n data",
-                                "alt_1" = "Alternative 1",
-                                "alt_2" = "Alternative 2")) +
+  scale_color_manual(values = colors$alt,
+                     labels = plot_labels$alternative) +
   theme_bw() + 
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        legend.position = "bottom") +
   labs(color = "", y = "Probability of reaching density threshold (1/ha)", x = "")
 
 
@@ -2423,7 +2445,7 @@ observed_plot
 # Figure 7
 real_data_plot
 
-# Figure 8 - still needs updating with 95% CIs for total pop
+# Figure 8
 all_est_N_vs_data_plot
 
 # Figure 9
@@ -2438,7 +2460,7 @@ coverage_plot
 # Figure 12
 final_density_plot
 
-# Figure 13 - still need to update per my comment in Word
+# Figure 13 
 density_threshold_plot
 
 # Figure A1
