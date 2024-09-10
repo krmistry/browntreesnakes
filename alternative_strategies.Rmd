@@ -154,6 +154,9 @@ Common elements of all strategies:
 -   50 ha area
 
     -   Assume rectangle with 220 m width; transects spaced 20 m apart, meaning total coverage would require \~113 transects
+    -   I assume that one team can do a visual survey OR check traps on 4 transects in 1 night, and one team can check bait tubes on 8 transects in 1 night
+        -   One team could survey or check traps on all transects in 29 days (two teams could do it 15 days).
+        -   One team could check all bait tubes in 15 days
 
 -   There could be a range of spatial coverage for transect-based methods, to simulate areas where transects are not possible (25%, 50%, 75%, 100%) - this could be a feature of all scenarios (except the one that is ADS only)
 
@@ -227,7 +230,13 @@ starting_size_dist$more_xlarge <- c(rep((1-0.42)/3,3), 0.42)
 
         -   If met: stop all methods for 1 quarter, do 1 round of visual survey (5 weeks, 2 teams) in 2nd quarter.
 
-3.  Eradication focus without ADS
+3.  ADS plus monitoring
+
+    -   The same ADS schedule as the ADS only strategy (2 drops per quarter), but with the addition of light monitoring via visual search so that it can be a dynamic strategy. Uses only one threshold to either turn ADS on or off.
+
+    -   Estimate population every 4 quarters (annually)
+
+4.  Eradication focus without ADS
 
     -   A strategy with no ADS but a high amount of transect-based effort, geared towards eradication with relatively little monitoring, as ADS is a little precarious and could disappear (company that provides the materials is not entirely solvent, it sounds like). The only threshold is also geared towards eradication, but only on one size class to see if that would be sufficient to signal if the reproductively active part of the population is nearing or reaching eradication (as opposed to making the threshold based on the entire population).
 
@@ -237,11 +246,7 @@ starting_size_dist$more_xlarge <- c(rep((1-0.42)/3,3), 0.42)
 
         -   If met: stop all methods for 2 quarters, do 1 round of low effort visual survey (2 weeks, 4 teams) in 4th quarter
 
-    -   Estimate population every 4 quarters
-
-4.  TBD
-
-5.  TBD
+    -   Estimate population every 4 quarters (annually)
 
 ### Strategy 1: Suppression focus without monitoring
 
@@ -371,14 +376,21 @@ for(P in 1:length(starting_density)) { # Starting pop permutation (low, medium o
 
 
 # Reading results back in
-replicates_strategy_one <- readRDS(file = here("Results", "alt_strategies", paste0("strategy_one_IBM_start_pop_low-more_small-var_1.rds")))
-  
+num_replicates <- 50
+replicates_strategy_one <- list()
+replicates_strategy_one$low_more_small <- list()
+for(var in 1:num_replicates) {
+  results <- readRDS(file = here("Results", "alt_strategies", "Strategy_one", "low_more_small", paste0("strategy_one_IBM_start_pop_low-more_small-var_", var, ".rds")))
+  replicates_strategy_one$low_more_small[[var]] <- results[[1]]
+}
+
 ### Reformat IBM results for plotting
 erad_plot_data_1 <- list()
 for(n in 1:num_replicates) {
   erad_plot_data_1[[n]] <- list()
-  results <- replicates_strategy_one[[n]]$all_quarters
-  for(quarter in 1:erad_quarter_time_step) {
+  results <- replicates_strategy_one$low_more_small[[n]]$all_quarters
+  num_quarters <- length(unique(results$Quarter))
+  for(quarter in 1:num_quarters) {
     erad_plot_data_1[[n]][[quarter]] <- as.data.frame(matrix(NA, nrow = 4, ncol = 2))
     colnames(erad_plot_data_1[[n]][[quarter]]) <- c("size_category", "N")
     for(size in 1:length(size_class_names)) {
@@ -386,7 +398,7 @@ for(n in 1:num_replicates) {
       erad_plot_data_1[[n]][[quarter]][size, 2] <- nrow(results[results$Quarter == (quarter+1) & results$size_category == size_class_names[size],])
     }
   }
-  names(erad_plot_data_1[[n]]) <- c(1:erad_quarter_time_step)
+  names(erad_plot_data_1[[n]]) <- c(1:num_quarters)
 }
 names(erad_plot_data_1) <- paste0("replicate", c(1:num_replicates))  
 
@@ -995,7 +1007,209 @@ stopCluster(cl = cl)
 
 ```
 
-### Strategy 3: Eradication focus without ADS
+### Strategy 3: ADS + monitoring
+
+The same ADS schedule as strategy 1, but with light visual survey monitoring and threshold to stop and start ADS. This will allow to directly determine how much wasted effort the first strategy has, as well as giving an idea of how quickly the population might bounce back once ADS is stopped
+
+-   Starting methods: one ADS treatment (2 drops) per quarter over entire area, and light effort visual surveys (every day for 2 weeks with 2 teams, in order to cover the entire area)
+
+-   Thresholds:
+
+    -   Estimated mean density is of upper size classes is \<= 1 snake/ha combined
+
+        -   If met: in next 4 quarters, stop ADS and only perform visual surveys (same effort as initial methods)
+
+-   Estimation occurs once per year
+
+```{r strategy_3_define_thresholds}
+
+strat_3_threshold_fun <- function(mean_N_df,
+                                  upper_3_threshold = 1,
+                                  area = area_size,
+                                  size_class = size_class_names) {
+  # Condition (default is initial)
+  condition <- "initial"
+  # Adding a column with density
+  mean_N_df$mean_density <- mean_N_df$N/area
+  # Identifying final time step (and the one right before)
+  last_quarters <- tail(sort(unique(mean_N_df$Quarter)),2)
+  # Separating final time step
+  last_quarter_means <- mean_N_df[mean_N_df$Quarter == last_quarters[2], ]
+  
+  ## Calculating mean densities 
+  # Upper 3 size classes combined
+  upper_3_mean_density <- sum(last_quarter_means$N[last_quarter_means$size_class != size_class[1]])/area
+  
+  ## Threshold 1: Estimated mean density is of upper size classes is <= 1 snake/ha combined 
+  if(upper_3_mean_density <= upper_3_threshold) {
+    condition <- "threshold_1"
+  }  
+  
+  return(condition)
+}
+```
+
+```{r strategy_3_setup}
+
+# Number of quarters to generate - 10 years
+erad_quarter_time_step <- 4
+
+# Methods for all evenatualities; starting, threshold 1, threshold 2 and threshold 3
+method_option_names <- c("initial", "threshold_1")
+method_options <- list()
+for(option in 1:length(method_option_names)) {
+  method_options[[option]] <- list()
+}
+names(method_options) <- method_option_names
+
+# Identifying the methods that will be used under each of these conditions
+method_options$initial$methods <- erad_methods[c(1:2)]
+method_options$threshold_1$methods <- erad_methods[2]
+
+
+## Quarters where eradication methods are used for each condition
+# All methods used in all quarters 
+for(option in 1:length(method_options)) {
+  method_options[[option]]$erad_quarters <- list()
+  for(method in method_options[[option]]$methods) {
+    method_options[[option]]$erad_quarters[[method]] <- c(1:erad_quarter_time_step)
+  }
+}
+
+
+## Days where eradication methods are used for each condition
+# Initial condition days
+method_options$initial$erad_days <- list()
+for(quarter in 1:erad_quarter_time_step) {
+  method_options$initial$erad_days[[quarter]] <- list()
+  # ADS: low effort (1 treatment) per quarter
+  method_options$initial$erad_days[[quarter]]$ADS <- c(45, 48)
+  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
+  method_options$initial$erad_days[[quarter]]$visual <- c(7:21)
+}
+names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
+
+# Threshold 1 days (visual surveys only)
+method_options$threshold_1$erad_days <- list()
+for(quarter in 1:erad_quarter_time_step) {
+  method_options$threshold_1$erad_days[[quarter]] <- list()
+  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
+  method_options$threshold_1$erad_days[[quarter]]$visual <- c(7:21)
+}
+names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
+
+
+# Bounds of primary sampling periods for each condition (the same for the first 3)
+for(option in 1:length(method_options)) {
+  method_options[[option]]$primary_sampling_period <- c(7, 21)
+}
+
+## Coverage for each method in a quarter for each condition
+for(option in 1:length(method_options)) {
+  method_options[[option]]$erad_coverage <- list()
+  # overlap of ADS over transects (100%) is the same for all conditions
+  method_options[[option]]$ADS_overlap_on_transect <- 1 
+}
+# Initial condition coverage
+method_options$initial$erad_coverage$ADS <- 1
+# Transect coverage (~50%)
+method_options$initial$erad_coverage$transects_per_quarter <- 1
+
+# Threshold 1 condition coverage
+method_options$threshold_1$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
+# Transect coverage (100% because effort is doubled) 
+method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
+
+# Number of visual survey teams for each method
+for(option in 1:length(method_options)) {
+  method_options[[option]]$num_teams <- list()
+}
+
+method_options$initial$num_teams$visual <- 1
+method_options$threshold_1$num_teams$visual <- 1
+```
+
+```{r strategy_3_run_IBM_once}
+
+# Initial total N 
+N <- starting_pop[[1]][1]
+# Initial size distribution
+size_dist <- starting_size_dist[[1]]
+
+# Separating out condition 
+methods <- method_options[[2]]$methods
+coverage <- method_options[[2]]$erad_coverage
+primary_sampling_period <- method_options[[2]]$primary_sampling_period
+erad_quarters <- method_options[[2]]$erad_quarters
+erad_days <- method_options[[2]]$erad_days
+ADS_overlap <- method_options[[2]]$ADS_overlap_on_transect
+num_teams <- method_options[[2]]$num_teams
+
+# Running IBM model with initial conditions
+erad_quarter_results <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method =  methods,
+                                           erad_coverage = coverage,
+                                           primary_sampling_period = primary_sampling_period,
+                                           erad_quarters = erad_quarters,
+                                           erad_days = erad_days,
+                                           ADS_overlap_on_transect = ADS_overlap,
+                                           type_of_run = "initial",
+                                           num_teams = num_teams)
+
+# Plotting the total population in each quarter
+erad_plot_1 <- ggplot(erad_quarter_results$all_quarters, 
+                      aes(x = Quarter, fill = size_category)) +
+  geom_bar() +
+  geom_hline(yintercept = K) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(erad_quarter_results$all_quarters$Quarter), labels = unique(erad_quarter_results$all_quarters$Quarter))
+```
+
+```{r strategy_3_run_estimation_once}
+
+### Running estimation model once 
+
+# Transforming multiple IBM runs into one dataset 
+
+# Estimation model set up
+estimation_inputs <- estimation_inputs_fun(erad_quarter_results$all_observed,
+                                           erad_quarter_results$all_effort)
+
+# Call JAGS Function
+output_jags <- jags(data = estimation_inputs$data, 
+                    inits = estimation_inputs$inits, 
+                    parameters.to.save = estimation_inputs$parameters, 
+                    "removal_model_simple_zero-inf.jags", 
+                    n.chains = nc, 
+                    n.thin = nt, 
+                    n.iter = ni,
+                    n.burnin = nb)
+
+saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_three", "Estimation",
+"output_jags_test.RDS"))
+
+# Parameter trace plots
+traceplot(output_jags, parameters = c("r1", "r2", "r3", "r4"))
+traceplot(output_jags, parameters = "p")
+traceplot(output_jags, parameters = "psi")
+
+# Mean N estimates vs simulated real N
+est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
+                                       all_quarters = erad_quarter_results$all_quarters,
+                                       observed_erad_quarters = estimation_inputs$obs_quarters,
+                                       observed_erad_days = estimation_inputs$obs_days)
+
+## Testing to see if any thresholds are met
+condition <- strat_3_threshold_fun(est_v_sim_N_plots$mean_N_df) 
+```
+
+### Strategy 4: Eradication focus without ADS
 
 A strategy with no ADS but a high amount of transect-based effort, geared towards eradication with relatively little monitoring, as ADS is a little precarious and could disappear (company that provides the materials is not entirely solvent, it sounds like). The only threshold is also geared towards eradication, but only on one size class to see if that would be sufficient to signal if the reproductively active part of the population is nearing or reaching eradication (as opposed to making the threshold based on the entire population).
 
@@ -1037,12 +1251,12 @@ A strategy with no ADS but a high amount of transect-based effort, geared toward
 
         -   One team can check the entire area in each quarter
 
-```{r strategy_3_define_thresholds}
+```{r strategy_4_define_thresholds}
 
 
 #mean_N_df <- est_v_sim_N_plots$mean_N_df
 
-strat_3_threshold_fun <- function(mean_N_df,
+strat_4_threshold_fun <- function(mean_N_df,
                                   xlarge_density = 0,
                                   area = area_size,
                                   size_class = size_class_names) {
@@ -1070,7 +1284,7 @@ strat_3_threshold_fun <- function(mean_N_df,
 
 ```
 
-```{r strategy_3_setup}
+```{r strategy_4_setup}
 
 ### Manually set IBM parameters
 # Number of quarters to generate between estimation rounds - 1 year at a time
@@ -1160,7 +1374,7 @@ method_options$threshold_1$num_teams$visual <- 1 # 3 teams when calculating cost
 
 ```
 
-```{r strategy_3_run_IBM_once}
+```{r strategy_4_run_IBM_once}
 
 # Initial total N 
 N <- starting_pop[[1]][1]
@@ -1203,7 +1417,7 @@ erad_plot_1 <- ggplot(erad_quarter_results$all_quarters,
 
 ```
 
-```{r strategy_3_run_estimation_once}
+```{r strategy_4_run_estimation_once}
 
 ### Running estimation model once 
 
@@ -1238,5 +1452,164 @@ est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
                                        observed_erad_days = estimation_inputs$obs_days)
 
 ## Testing to see if any thresholds are met
-condition <- strat_3_threshold_fun(est_v_sim_N_plots$mean_N_df) 
+condition <- strat_4_threshold_fun(est_v_sim_N_plots$mean_N_df) 
+```
+
+```{r strategy_4_dynamic}
+
+# The longest the simulation will go on (10 years for real, 1 to start)
+final_time_step <- 10
+# Initial total N 
+N <- starting_pop[[1]][1]
+# Initial size distribution
+size_dist <- starting_size_dist[[1]]
+
+
+# List to save IBM results outside of loop
+IBM_results <- list()
+IBM_observed_results <- list()
+IBM_effort_results <- list()
+IBM_all_quarters <- as.data.frame(matrix(nrow = 0, ncol = 8))
+colnames(IBM_all_quarters) <- c("ID", "sex", "repro_prob", "growth_quant", "variable", "SVL", "Quarter", "size_category")
+# Record of effort details as condition changes
+estimation_effort_record <- list()
+estimation_effort_record$condition <- vector()
+estimation_effort_record$primary_sampling_period <- list()
+estimation_effort_record$erad_quarters <- list()
+estimation_effort_record$erad_days <- list()
+# Starting condition
+condition <- "initial"
+# Starting counter
+t <- 1
+while(t <= final_time_step) {
+  if(t == 1) { # First time step 
+    # Initial total N 
+    N <- starting_pop[[1]][1]
+    # Initial size distribution
+    size_dist <- starting_size_dist[[1]]
+    # Separating out methods for initial condition
+    new_methods <- method_options$initial
+    # Setting parameter to run IBM initially
+    run_type <- "initial"
+    # Creating empty variable so function will run 
+    last_quarter_df <- NULL
+  } else {
+    # Identifying methods condition 
+    new_methods <- method_options[[condition]]
+    # Isolating population from final time step to make the new initial population
+    last_quarter_df <- IBM_results[[t-1]]$quarter_timeseries[[erad_quarter_time_step+1]]
+    # Setting parameter to run IBM with existing population
+    run_type <- "continuing"
+  } 
+  # Separating out parameters based on condition 
+    methods <- new_methods$methods
+    coverage <- new_methods$erad_coverage
+    primary_sampling_period <- new_methods$primary_sampling_period
+    erad_quarters <- new_methods$erad_quarters
+    erad_days <- new_methods$erad_days
+    ADS_overlap <- new_methods$ADS_overlap_on_transect
+    num_teams <- new_methods$num_teams
+    
+    # Save method options 
+    # Recording condition effort for next estimation round
+  estimation_effort_record$condition[t] <- condition
+  estimation_effort_record$primary_sampling_period[[t]] <- primary_sampling_period
+  estimation_effort_record$erad_quarters[[t]] <- erad_quarters
+  estimation_effort_record$erad_days[[t]] <- erad_days
+    
+    # Running IBM model with condition methods
+    IBM_results[[t]] <- quarter_operations(initial_N = N, 
+                                           initial_size_dist = size_dist, 
+                                           p_g = g_density_prob,
+                                           lambda = lambda,
+                                           total_quarters = erad_quarter_time_step,
+                                           total_days = day_time_step,
+                                           erad = "on",
+                                           erad_method =  methods,
+                                           erad_coverage = coverage,
+                                           primary_sampling_period = primary_sampling_period,
+                                           erad_quarters = erad_quarters,
+                                           erad_days = erad_days,
+                                           ADS_overlap_on_transect = ADS_overlap,
+                                           type_of_run = run_type,
+                                           last_quarter_df = last_quarter_df,
+                                           num_teams = num_teams)
+  
+
+    
+  # Saving IBM observed and effort from this run
+  #if(t == 1) {
+    IBM_observed_results[[t]] <- IBM_results[[t]]$all_observed
+    IBM_effort_results[[t]] <- IBM_results[[t]]$all_effort
+    # Correcting the quarters in the IBM that just ran if t > 1, after removing the final quarter (which is just the starting values)
+    IBM_results[[t]]$all_quarters <- IBM_results[[t]]$all_quarters[IBM_results[[t]]$all_quarters$Quarter %in% c(1:erad_quarter_time_step),]
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 1] <- t*4 - 3
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 2] <- t*4 - 2
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 3] <- t*4 - 1
+    IBM_results[[t]]$all_quarters$Quarter[IBM_results[[t]]$all_quarters$Quarter == 4] <- t*4 
+    
+    # Save IBM results from this run
+      saveRDS(IBM_results, file = here("Results", "alt_strategies", "Strategy_three", "IBM", paste0("IBM_results_test_IBM_set-", t, ".rds")))
+    
+    # Saving all IBM quarter results
+    IBM_all_quarters <- rbind(IBM_all_quarters, IBM_results[[t]]$all_quarters)
+      
+    
+  # } else {
+  #   IBM_observed_results[[t]] <- c(IBM_observed_results[[t-1]]$all_observed,
+  #                                    IBM_observed_results[[t]]$all_observed)
+  #   IBM_effort_results[[t]] <- c(IBM_effort_results[[t-1]]$all_effort,
+  #                                    IBM_effort_results[[t]]$all_effort)
+  # }
+  # Combining observations and efforts from all previous runs, and adjusting the quarters 
+  combined_observed <- unlist(IBM_observed_results, recursive = FALSE)
+  combined_effort <- unlist(IBM_effort_results, recursive = FALSE)
+  for(quarter in 1:length(combined_observed)) {
+    if(length(combined_observed[[quarter]]) > 0) {
+      combined_observed[[quarter]]$quarter <- quarter
+    }
+    # if(nrow(combined_observed[[quarter]]) > 0) {
+    # combined_observed[[quarter]]$quarter <- quarter
+    # } else {
+    #   combined_observed[[quarter]][1,] <- NA
+    #   combined_observed[[quarter]]$quarter <- NA
+    #   combined_observed[[quarter]] <- combined_observed[[quarter]][0,]
+    # }
+    combined_effort[[quarter]]$quarter <- quarter
+  }
+  # Combining the erad_days from all previous runs
+  combined_erad_days <- unlist(estimation_effort_record$erad_days, recursive = FALSE)
+  names(combined_erad_days) <- paste0("quarter_", c(1:length(combined_erad_days)))
+  # Estimation model set up
+  estimation_inputs <- estimation_inputs_fun(observed_list = combined_observed,
+                                             effort_list = combined_effort)
+  # Call JAGS Function
+  output_jags <- jags(data = estimation_inputs$data,
+                    inits = estimation_inputs$inits,
+                    parameters.to.save = estimation_inputs$parameters,
+                    "removal_model_alt_strategies.jags",
+                    n.chains = nc,
+                    n.thin = nt,
+                    n.iter = ni,
+                    n.burnin = nb)
+  if(t %in% c(1:3, 5, 10)) {
+    saveRDS(output_jags, file = here("Results", "alt_strategies", "Strategy_three", "Estimation",
+    paste0("output_jags_test_", t, ".RDS")))
+  }
+  
+  # Mean N estimates vs simulated real N
+  est_v_sim_N_plots <- estimated_N_plots(jags_output = output_jags,
+                                         all_quarters = IBM_all_quarters,
+                                         observed_erad_quarters = estimation_inputs$obs_quarters, 
+                                         observed_erad_days = estimation_inputs$obs_days)
+
+
+  ## Testing to see if any thresholds are met
+  mean_N_df <- est_v_sim_N_plots$mean_N_df
+  condition <- strat_4_threshold_fun(mean_N_df)
+  # Advancing counter by the number of quarters that have been estimated
+  t <- t+1
+}
+
+
 ```
