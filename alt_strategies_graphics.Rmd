@@ -19,10 +19,11 @@ library(vctrs)
 
 source(here("Scripts/00_user_inputs.R"))
 
-strategy_names <- paste0("strategy_", 1:3)
-num_strategies <- length(strategy_names)
-strategy_methods <- list()
-strategy_effort_plots <- list()
+# Setting folder to save plots to
+save_folder <- paste0(here("Results/alt_strategies/Manuscript_plots"), "/")
+
+strategies <- paste0("strategy_", 1:4)
+num_strategies <- length(strategies)
 
 plot_labels <- list()
 plot_labels$size_class <- c("small" = "Small",
@@ -38,6 +39,11 @@ plot_labels$type_of_N <- c("small" = "Small",
                            "large" = "Large", 
                            "xlarge" = "X-large", 
                            "total" = "Total")
+plot_labels$strategy <- c("ADS only",
+                          "all methods",
+                          "ADS plus monitoring",
+                          "ground-based methods")
+names(plot_labels$strategy) <- strategies
 
 colors <- list()
 colors$methods <- c(hue_pal()(4)[c(1, 4, 3, 2)])
@@ -48,263 +54,29 @@ names(colors$methods) <- erad_methods
 
 # Graphics & tables for all alternative strategies
 
-```{r strategy_1_set_up}
-
-# The number of quarters in the strategy (methods are the same for every quarter, so just going to who one)
-erad_quarter_time_step <- 1
-
-method_options <- list()
-method_options$initial <- list()
-
-# Methods used
-method_options$initial$methods <- erad_methods[1]
-
-# Quarters where eradication methods are used, and which days in that quarter:
-method_options$initial$erad_quarters <- list()
-method_options$initial$erad_quarters$ADS <- c(1:erad_quarter_time_step)
-method_options$initial$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$initial$erad_days[[quarter]] <- list()
-  method_options$initial$erad_days[[quarter]]$ADS <- c(45, 48)
-}
-names(method_options$initial$erad_days) <- paste0("quarter_", method_options$initial$erad_quarters$ADS)
-
-# Bounds of primary sampling period (since there is no monitoring, this doesn't matter but it's a required parameter for a function)
-method_options$initial$primary_sampling_period <- c(0,0)
-
-# Coverage for each method in a quarter 
-method_options$initial$erad_coverage <- list()
-method_options$initial$erad_coverage$ADS <- 1
-# Transect coverage and overlap of ADS over transects - there aren't actually any transect methods so neither of these is relevant, but they are required parameters at the moment and its not a high priority to fix that, so keeping them in for now
-method_options$initial$erad_coverage$transects_per_quarter <- 0
-method_options$initial$ADS_overlap_on_transect <- 1 
-
-# Another required parameter that doesn't matter for this strategy, because there is no visual survey occurring
-method_options$initial$num_teams <- list()
-method_options$initial$num_teams$visual <- 0
-
-# Saving the above to a larger list with all strategies methods
-strategy_methods$strategy_1 <- method_options
-
-```
-
-
-
-```{r strategy_2_set_up}
-### Manually set IBM parameters
-# Number of quarters to generate - 10 years
-erad_quarter_time_step <- 2
-
-# Methods for all evenatualities; starting, threshold 1, threshold 2 and threshold 3
-method_option_names <- c("initial", paste0("threshold_", c(1:3)))
-method_options <- list()
-for(option in 1:length(method_option_names)) {
-  method_options[[option]] <- list()
-}
-names(method_options) <- method_option_names
-
-# Identifying the methods that will be used under each of these conditions
-method_options$initial$methods <- erad_methods
-method_options$threshold_1$methods <- erad_methods[2]
-method_options$threshold_2$methods <- erad_methods
-method_options$threshold_3$methods <- erad_methods[2]
-
-## Quarters where eradication methods are used for each condition
-# All methods used in all quarters for first 3 conditions
-for(option in 1:3) {
-  method_options[[option]]$erad_quarters <- list()
-  for(method in method_options[[option]]$methods) {
-    method_options[[option]]$erad_quarters[[method]] <- c(1:erad_quarter_time_step)
-  }
-}
-# Condition 4 only has methods occurring in 2nd quarter
-method_options$threshold_3$erad_quarters <- 2
-
-## Days where eradication methods are used for each condition
-# Initial condition days
-method_options$initial$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$initial$erad_days[[quarter]] <- list()
-  # ADS: low effort (1 treatment) per quarter
-  method_options$initial$erad_days[[quarter]]$ADS <- c(45, 48)
-  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
-  method_options$initial$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
-  # Trap: medium effort (6 weeks) per quarter - checking traps every 3 days
-  method_options$initial$erad_days[[quarter]]$trap <- seq(2, (7*6 - 1), 3)
-  # Bait tubes: medium effort (6 weeks) per quarter
-  method_options$initial$erad_days[[quarter]]$bait_tube <- seq(7*6, (7*12 - 1), 3)
-}
-names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
-
-# Threshold 1 days (visual surveys only)
-method_options$threshold_1$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$threshold_1$erad_days[[quarter]] <- list()
-  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
-  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
-}
-names(method_options$threshold_1$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
-
-# Threshold 2 days (same as initial - coverage is what expands)
-method_options$threshold_2$erad_days <- method_options$initial$erad_days
-
-# Threshold 3 days (no effort in first quarter, with visual effort in the 2nd quarter)
-method_options$threshold_3$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$threshold_3$erad_days[[quarter]] <- list()
-  method_options$threshold_3$erad_days[[quarter]]$visual <- seq(2, (7*6 - 1), 2)
-}
-names(method_options$threshold_3$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
-
-
-# Bounds of primary sampling periods for each condition (the same for the first 3)
-for(option in 1:length(method_options)) {
-  method_options[[option]]$primary_sampling_period <- c(2,(7*6 - 1))
-}
-
-
-## Coverage for each method in a quarter for each condition
-for(option in 1:length(method_options)) {
-  method_options[[option]]$erad_coverage <- list()
-  # overlap of ADS over transects (100%) is the same for all conditions
-  method_options[[option]]$ADS_overlap_on_transect <- 1 
-}
-# Initial condition coverage
-method_options$initial$erad_coverage$ADS <- 1
-# Transect coverage (~50%)
-method_options$initial$erad_coverage$transects_per_quarter <- 0.5
-
-# Threshold 1 condition coverage
-method_options$threshold_1$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
-# Transect coverage (100% because effort is doubled) 
-method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
-
-# Threshold 2 condition coverage
-method_options$threshold_2$erad_coverage$ADS <- 1
-# Transect coverage (100%)
-method_options$threshold_2$erad_coverage$transects_per_quarter <- 1
-
-# Threshold 3 condition coverage
-method_options$threshold_3$erad_coverage$ADS <- 0 # necessary for a function,
-# Transect coverage (~50%)
-method_options$threshold_3$erad_coverage$transects_per_quarter <- 0.5
-
-# Number of visual survey teams for each method
-for(option in 1:length(method_options)) {
-  method_options[[option]]$num_teams <- list()
-}
-
-method_options$initial$num_teams$visual <- 1
-method_options$threshold_1$num_teams$visual <- 1
-method_options$threshold_2$num_teams$visual <- 1
-method_options$threshold_3$num_teams$visual <- 1
-
-# Saving the above to a larger list with all strategies methods
-strategy_methods$strategy_2 <- method_options
-
-
-```
-
-
-
-```{r strategy_3_set_up}
-### Manually set IBM parameters
-# Number of quarters to generate between estimation rounds - 1 year at a time
-erad_quarter_time_step <- 4
-
-# Methods for all evenatualities; starting, threshold 1, threshold 2 and threshold 3
-method_option_names <- c("initial", "threshold_1")
-method_options <- list()
-for(option in 1:length(method_option_names)) {
-  method_options[[option]] <- list()
-}
-names(method_options) <- method_option_names
-
-# Identifying the methods that will be used under each of these conditions
-method_options$initial$methods <- erad_methods[c(2:4)]
-method_options$threshold_1$methods <- erad_methods[2]
-
-## Quarters where eradication methods are used for each condition
-# All methods used in all quarters for initial condition
-method_options$initial$erad_quarters <- list()
-for(method in method_options$initial$methods) {
-  method_options$initial$erad_quarters[[method]] <- c(1:erad_quarter_time_step)
-}
-
-# Threshold 1: no methods used in the first 2 quarters, visual in later 2 quarters
-method_options$threshold_1$erad_quarters <- list()
-method_options$threshold_1$erad_quarters$visual <- c(3:4)
-
-## Days where eradication methods are used for each condition
-# Initial condition days
-method_options$initial$erad_days <- list()
-for(quarter in 1:erad_quarter_time_step) {
-  method_options$initial$erad_days[[quarter]] <- list()
-  # Visual survey: medium effort (9 weeks, 2 teams) per quarter - surveying every other day
-  method_options$initial$erad_days[[quarter]]$visual <- seq(2, (7*10 - 1), 2)
-  # Trap: medium effort (6 weeks) per quarter - checking traps every 3 days
-  method_options$initial$erad_days[[quarter]]$trap <- seq(2, (7*10 - 1), 3)
-  # Bait tubes: medium effort (6 weeks) per quarter
-  method_options$initial$erad_days[[quarter]]$bait_tube <- seq(7*3, (7*12 - 1), 3)
-}
-names(method_options$initial$erad_days) <- paste0("quarter_", c(1:erad_quarter_time_step))
-
-# Threshold 1 days (visual surveys only)
-method_options$threshold_1$erad_days <- list()
-for(quarter in 1:length(method_options$threshold_1$erad_quarters$visual)) {
-  method_options$threshold_1$erad_days[[quarter]] <- list()
-  # Visual survey: medium effort (6 weeks, 2 teams) per quarter - surveying every other day
-  method_options$threshold_1$erad_days[[quarter]]$visual <- seq(2, 7*2, 2)
-}
-names(method_options$threshold_1$erad_days) <- paste0("quarter_", method_options$threshold_1$erad_quarters$visual)
-
-
-# Bounds of primary sampling periods for each condition (different for each)
-method_options$initial$primary_sampling_period <- c(2,(7*3 - 1))
-method_options$threshold_1$primary_sampling_period <- c(2, 7*2)
-
-
-## Coverage for each method in a quarter for each condition
-for(option in 1:length(method_options)) {
-  method_options[[option]]$erad_coverage <- list()
-  # even though there is no ADS in this strategy, this is a required parameter, and it doesn't actually impact anything
-  method_options[[option]]$ADS_overlap_on_transect <- 0 
-}
-# Initial condition coverage
-method_options$threshold_1$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
-# Transect coverage (100%)
-method_options$initial$erad_coverage$transects_per_quarter <- 1
-
-# Threshold 1 condition coverage
-method_options$threshold_1$erad_coverage$ADS <- 0 # necessary for a function, can fix this later
-# Transect coverage (100% because effort is doubled) 
-method_options$threshold_1$erad_coverage$transects_per_quarter <- 1
-
-
-
-# Number of visual survey teams for each method
-for(option in 1:length(method_options)) {
-  method_options[[option]]$num_teams <- list()
-}
-
-method_options$initial$num_teams$visual <- 4
-method_options$threshold_1$num_teams$visual <- 2
-
-# Saving the above to a larger list with all strategies methods
-strategy_methods$strategy_3 <- method_options
-
-```
-
 
 ```{r strategy_effort_plots} 
 
 strategy_effort_plots <- list()
-for(strategy in strategy_names) {
-  method_options <- strategy_methods[[strategy]]
+for(strategy in strategies) {
+  source(paste0(here("Scripts/"), strategy, "_set_up.R"))
+  #method_options <- strategy_methods[[strategy]]
   strategy_effort_plots[[strategy]] <- list()
   for(condition in 1:length(method_options)) {
     # Dataframe with days, weeks, quarters, for each method
-    effort_df <- melt(method_options[[condition]]$erad_days)
+    # Check for empty elements in method_options condition list
+    empty_quarters <- vector()
+    for(quarter in 1:length(method_options[[condition]]$erad_days)) {
+      if(length(method_options[[condition]]$erad_days[[quarter]]) == 0) {
+        method_options[[condition]]$erad_days[[quarter]]$visual <- 0
+      }
+    }
+    if(strategy != strategies[1]) {
+      effort_df <- melt(method_options[[condition]]$erad_days)
+    } else {
+      effort_df <- melt(method_options[[1]]$erad_days$quarter_1)
+      effort_df$Quarter <- "quarter_1"
+    }
     colnames(effort_df) <- c("day", "method", "Quarter")
     # Renaming quarter values
     effort_df$Quarter <- gsub("quarter_", "Quarter ", effort_df$Quarter)
@@ -319,15 +91,20 @@ for(strategy in strategy_names) {
                          limits = c(0, 13)) +
       scale_y_continuous(breaks = c(0:7), labels = c(0:7), 
                          limits = c(0, 8)) +
-      labs(y = "Number of Days", fill = "Method", x = "Week") +
+      labs(y = "Number of Days per Week", fill = "Method", x = "Week",
+           title = paste0(plot_labels$strategy[strategy], " strategy under ", 
+                          names(method_options)[condition], " conditions")) +
       theme_bw() +
       theme(panel.grid.minor = element_blank())
     
     # Saving above plot to list for all strategies
     strategy_effort_plots[[strategy]][[condition]] <- effort_plot
+    # Saving plot to folder
+    ggsave(filename = paste0(save_folder, strategy, "_", names(method_options)[condition], "_methods_plot.png"), effort_plot, device = 'png', width = 6, height = 4)
   }
   names(strategy_effort_plots[[strategy]]) <- names(method_options)
 }
+
 
 
 
