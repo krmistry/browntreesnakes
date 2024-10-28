@@ -5,10 +5,7 @@ source(here("Scripts", "cost_setup.R"))
 
 # Labels & objects needed for all strategies
 strategies <- paste0("Strategy_", c("one", "two", "three", "four"))
-strat_set_up_file <- c("strategy_1_set_up.R", 
-                       "strategy_2_set_up.R", 
-                       "strategy_3_setup.R", 
-                       "strategy_4_set_up.R")
+strat_set_up_file <- paste0("strategy_", c(1:4), "_set_up.R")
 names(strat_set_up_file) <- strategies
 num_transects <- c("total" = 113)
 
@@ -20,9 +17,9 @@ strategy_condition_costs <- list()
 source(paste0(here("Scripts"), "/",strat_set_up_file[1]))
 
 strategy_condition_costs[[strategies[1]]] <- list()
-strategy_condition_costs[[strategies[1]]]$initial <- cost_function(methods = names(erad_quarters), 
-                                                                   erad_days = erad_days, 
-                                                                   erad_quarters = erad_quarters, 
+strategy_condition_costs[[strategies[1]]]$initial <- cost_function(methods = names(method_options$initial$erad_quarters), 
+                                                                   erad_days = method_options$initial$erad_days, 
+                                                                   erad_quarters = method_options$initial$erad_quarters, 
                                                                    area_size = area_size)
 
 
