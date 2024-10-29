@@ -37,8 +37,8 @@ plot_labels$type_of_N <- c("small" = "Small",
                            "total" = "Total")
 plot_labels$strategy <- c("ADS only",
                           "all methods",
-                          "ground-based methods",
-                          "ADS plus monitoring")
+                          "ADS plus monitoring",
+                          "ground-based methods")
 names(plot_labels$strategy) <- strategies
 plot_labels$permutation <- c("low density,\n more small snakes",
                             "low density,\n more x-large snakes",
@@ -55,7 +55,7 @@ plot_colors$permutation <- hue_pal()(length(permutations))
 names(plot_colors$permutation) <- permutations
 
 # Checking for and creating if necessary all results folders
-save_folder <- paste0(here("Results", "alt_strategies"), "/")
+save_folder <- paste0(here("Results", "alt_strategies", "Manuscript_plots"), "/")
 
 #### Analyzing results by permutation & strategy ####
 
@@ -79,7 +79,6 @@ for(permutation_name in permutations) {
   for(strategy in strategies) {
     N_data_list[[permutation_name]][[strategy]] <- list()
     estimates_list[[permutation_name]][[strategy]] <- list()
-    conditions_list[[permutation_name]][[strategy]] <- list()
     # Read in results for this permutation and strategy
     permutation_results <- readRDS(paste0(here("Results", "alt_strategies", strategy, "permutation_results"),
                                             "/permutation-", permutation_name, "_results.RDS"))
@@ -88,9 +87,8 @@ for(permutation_name in permutations) {
     # Assign estimated N data
     estimates_list[[permutation_name]][[strategy]] <- permutation_results$N_data_plot$data_all_variants
     # Assign conditions data (except for strategy 1)
-    if(strategy == strategies[1]) {
-      conditions_list[[permutation_name]][[strategy]] <- NA
-    } else {
+    if(strategy != strategies[1]) {
+      conditions_list[[permutation_name]][[strategy]] <- list()
       conditions_list[[permutation_name]][[strategy]] <- permutation_results$condition_plot$condition_record
     }
     # Assign eradication & threshold probabilities
@@ -307,12 +305,13 @@ cost_vs_upper_3_objs_plot_by_permutation <- ggplot(costs_vs_obj_probs) +
   scale_color_manual(values = plot_colors$strategy,
                      labels = plot_labels$strategy) +
   theme_bw()+
+  theme(legend.position="bottom") +
   labs(x = "Projected mean cost (dollars in millions)", 
        y = "Probability of suppression upper 3 size classes",
        color = "Strategy")
 
 ggsave(filename = paste0(save_folder, "costs_vs_upper_3_obj_comparison_by_permutation_plot.png"),
-       cost_vs_upper_3_objs_plot_by_permutation, device = 'png', width = 6, height = 4)
+       cost_vs_upper_3_objs_plot_by_permutation, device = 'png', width = 7, height = 4)
 
 cost_vs_upper_3_objs_plot_by_strategy <- ggplot(costs_vs_obj_probs) +
   geom_point(aes(y = upper_3_suppress_prob, x = mean_cost/1000000, color = permutation)) +
@@ -333,12 +332,13 @@ cost_vs_total_supp_objs_plot_by_permutation <- ggplot(costs_vs_obj_probs) +
   scale_color_manual(values = plot_colors$strategy,
                      labels = plot_labels$strategy) +
   theme_bw()+
+  theme(legend.position="bottom") +
   labs(x = "Projected mean cost (dollars in millions)", 
        y = "Probability of total population suppression",
        color = "Strategy")
 
 ggsave(filename = paste0(save_folder, "costs_vs_total_supp_obj_comparison_by_permutation_plot.png"),
-       cost_vs_total_supp_objs_plot_by_permutation, device = 'png', width = 6, height = 4)
+       cost_vs_total_supp_objs_plot_by_permutation, device = 'png', width = 7, height = 4)
 
 cost_vs_total_supp_objs_plot_by_strategy <- ggplot(costs_vs_obj_probs) +
   geom_point(aes(y = total_suppress_prob, x = mean_cost/1000000, color = permutation)) +
@@ -356,14 +356,97 @@ ggsave(filename = paste0(save_folder, "costs_vs_total_supp_obj_comparison_by_str
 
 
 ##### Method combinations in each threshold condition for each strategy #####
-
+# in alternative_strategies_graphics script
 
 ##### Actual methods used across replicates for each dynamic strategy #####
+all_conditions <- melt(conditions_list, id.vars = colnames(conditions_list[[1]]$Strategy_two))
+colnames(all_conditions)[c(4:5)] <- c("strategy", "permutation")
+all_conditions$permutation <- factor(all_conditions$permutation, levels = c("low_more_small",
+                                                                            "medium_more_small",
+                                                                            "high_more_small",
+                                                                            "low_more_xlarge",
+                                                                            "medium_more_xlarge",
+                                                                            "high_more_xlarge"))
+all_conditions$strategy <- factor(all_conditions$strategy, levels = strategies)
+# Removing the single threshold_3 value (it wasn't applied, the final snake died of natural mortality)
+remove_ind <- which(all_conditions$condition == "threshold_3")
+all_conditions <- all_conditions[-remove_ind,]
+
+condition_plot <- ggplot(all_conditions) +
+  geom_bar(aes(y = set, fill = condition)) +
+  facet_grid(rows = vars(strategy), cols = vars(permutation), scales = "free_y",
+             labeller = labeller(permutation = plot_labels$permutation, 
+                                 strategy = plot_labels$strategy)) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(y = "Estimation steps", x = "Replicate", fill = "Methods condition")
+
+ggsave(filename = paste0(save_folder, "all_conditions_plot.png"),
+       condition_plot, device = 'png', width = 8.2, height = 5.5)
 
 
-##### Format dataframe for a table of total costs for each strategy #####
+##### Format dataframe for a plot of total costs for each strategy #####
+
+### Below melts all of the variants' costs into a single dataframe, but I probably only 
+### care about the mean cost per strategy, so using that instead for plotting
+# dynamic_costs <- list()
+# for(permutation in permutations) {
+#   # Exclude min_dollars from strategy 2 and rename the column to match the others
+#   strategy_two_costs <- permutation_costs[[permutation]]$Strategy_two[,-1]
+#   colnames(strategy_two_costs)[1] <- "dollars"
+#   strategy_two_costs$strategy <- strategies[2]
+#   # Separate out strategy one and melt the other strategy costs
+#   strategy_costs <- melt(permutation_costs[[permutation]][c(3:4)], 
+#                          id.vars = colnames(permutation_costs[[1]][[3]]))
+#   colnames(strategy_costs)[5] <- "strategy"
+#   strategy_costs <- rbind(strategy_costs, strategy_two_costs)
+#   dynamic_costs[[permutation]] <- strategy_costs
+# }
+# # Melt all permutations together
+# all_dynamic_costs <- melt(dynamic_costs, id.vars = colnames(dynamic_costs[[1]]))
+# colnames(all_dynamic_costs)[6] <- "permutation"
+
+# Fixing factor levels for plotting
+all_mean_costs$permutation <- factor(all_mean_costs$permutation, levels = c("low_more_small",
+                                                                            "medium_more_small",
+                                                                            "high_more_small",
+                                                                            "low_more_xlarge",
+                                                                            "medium_more_xlarge",
+                                                                            "high_more_xlarge"))
+all_mean_costs$strategy <- factor(all_mean_costs$strategy, levels = strategies)
+
+mean_cost_by_method_strat_plot <- ggplot(all_mean_costs) +
+  geom_bar(aes(y = mean_cost, x = strategy, fill = strategy), position="dodge", stat="identity") +
+  facet_grid(rows = vars(method), cols = vars(permutation),
+             labeller = labeller(method = c(plot_labels$method, "transects" = "Transects"), 
+                                 permutation = plot_labels$permutation)) +
+  scale_fill_manual(values = plot_colors$strategy,
+                     labels = plot_labels$strategy) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(y = "Mean cost (dollars in millions)", x = "Strategy", fill = "") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+ggsave(filename = paste0(save_folder, "mean_cost_by_method-strat_plot.png"),
+       mean_cost_by_method_strat_plot, device = 'png', width = 8.2, height = 5.5)
 
 
+mean_cost_by_method_perm_plot <- ggplot(all_mean_costs) +
+  geom_bar(aes(y = mean_cost, x = permutation, fill = permutation), position="dodge", stat="identity") +
+  facet_grid(rows = vars(method), cols = vars(strategy),
+             labeller = labeller(method = c(plot_labels$method, "transects" = "Transects"), 
+                                 strategy = plot_labels$strategy)) +
+  scale_fill_manual(values = plot_colors$permutation,
+                    labels = plot_labels$permutation) +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(y = "Mean cost (dollars in millions)", x = "Permutation", fill = "") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+
+ggsave(filename = paste0(save_folder, "mean_cost_by_method-perm_plot.png"),
+       mean_cost_by_method_perm_plot, device = 'png', width = 8, height = 5.5)
 
 #### Plots of accuracy & precision metrics (RMSE, PRD and coverage) & dataframe for table ####
 
