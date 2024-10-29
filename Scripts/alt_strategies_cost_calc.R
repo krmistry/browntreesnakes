@@ -1,6 +1,6 @@
 ### Cost calculation for each strategy
 # Read in all strategy set up objects & cost set up
-source(here("Scripts", "all_strategy_set_up.R"))
+#source(here("Scripts", "all_strategy_set_up.R"))
 source(here("Scripts", "cost_setup.R"))
 
 # Labels & objects needed for all strategies
